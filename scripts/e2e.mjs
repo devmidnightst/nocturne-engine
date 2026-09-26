@@ -213,7 +213,7 @@ async function runErrorPage() {
 	await page.goto(`${base}/?go=${encodeURIComponent("http://nocturne-does-not-exist.invalid/")}`);
 	try {
 		await page.waitForFunction(
-			() => document.getElementById("frame").contentDocument?.title?.includes("Nocturne Engine"),
+			() => document.getElementById("frame").contentDocument?.title?.includes("Umbrella"),
 			null,
 			{ timeout: 30_000 }
 		);
@@ -255,7 +255,7 @@ async function runRealSites() {
 		}
 		const shot = `e2e-${new URL(url).hostname}.png`;
 		await page.screenshot({ path: shot });
-		title && !title.includes("Nocturne Engine") ? pass(`${url} loaded ("${title}", screenshot ${shot})`) : fail(`${url} did not load (title "${title}")`);
+		title && !title.includes("Umbrella") ? pass(`${url} loaded ("${title}", screenshot ${shot})`) : fail(`${url} did not load (title "${title}")`);
 		if (errors.length) console.log(`       shell errors: ${errors.slice(0, 3).join(" | ")}`);
 		await context.close();
 	}

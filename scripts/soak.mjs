@@ -214,8 +214,8 @@ const TARGETS = [
 	{ kind: "heavy", url: FIX + "soak-heavy.html", done: (d) => d.title === "heavy done" },
 	{ kind: "child", url: FIX + "child.html", done: (d) => d.readyState === "complete" && d.body?.innerText?.includes("child") },
 	{ kind: "redirect", url: FIX + "redirect", done: (d) => d.readyState === "complete" && d.body?.innerText?.includes("redirected") },
-	{ kind: "error", url: "http://nocturne-soak-does-not-exist.invalid/", done: (d) => d.title?.includes("Nocturne Engine") },
-	...REAL.map((url) => ({ kind: "real", url, done: (d) => d.readyState === "complete" && d.title && !d.title.includes("Nocturne Engine") })),
+	{ kind: "error", url: "http://nocturne-soak-does-not-exist.invalid/", done: (d) => d.title?.includes("Umbrella") },
+	...REAL.map((url) => ({ kind: "real", url, done: (d) => d.readyState === "complete" && d.title && !d.title.includes("Umbrella") })),
 ];
 
 async function navigate(shell, target) {

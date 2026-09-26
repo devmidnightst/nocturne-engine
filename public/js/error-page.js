@@ -45,7 +45,7 @@ const KINDS = [
 		id: "transport",
 		test: /(wisp|websocket|transport|socket (is )?closed|ws:|wss:)/i,
 		title: "lost connection to the proxy server",
-		hint: "the tunnel to the nocturne server dropped. reload, or switch transport in settings.",
+		hint: "the tunnel to the umbrella server dropped. reload, or switch transport in settings.",
 	},
 ];
 
@@ -134,9 +134,9 @@ export function renderErrorPage({ url, error, kind = classifyError(error), statu
 	const detail = String(error?.stack || error?.message || error || "").slice(0, 1500);
 	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escape(kind.title)} | Nocturne Engine</title><style>${STYLE}</style></head>
+<title>${escape(kind.title)} | Umbrella</title><style>${STYLE}</style></head>
 <body><main class="card">
-<div class="brand"><i></i>nocturne engine</div>
+<div class="brand"><i></i>umbrella</div>
 <h1>${escape(kind.title)}</h1>
 <p>${escape(kind.hint)}</p>
 <span class="url">${escape(url)}</span>
@@ -156,7 +156,7 @@ document.getElementById("home").onclick = () => send("home");
 	return {
 		body: html,
 		status,
-		statusText: "Nocturne Error",
+		statusText: "Umbrella Error",
 		headers: [
 			["content-type", "text/html; charset=utf-8"],
 			["cache-control", "no-store"],
@@ -168,7 +168,7 @@ export function renderBlockedPage(url) {
 	const kind = {
 		id: "adblock",
 		title: "blocked by the ad blocker",
-		hint: "this address is on nocturne's ad and tracker list. you can turn blocking off in settings.",
+		hint: "this address is on umbrella's ad and tracker list. you can turn blocking off in settings.",
 	};
 	return renderErrorPage({ url, error: "blocked by content blocker", kind, status: 403 });
 }

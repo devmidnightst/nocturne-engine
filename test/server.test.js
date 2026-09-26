@@ -57,10 +57,10 @@ test("service worker is uncached and allowed at the root scope", async () => {
 test("shell pages", async () => {
 	const index = await get("/");
 	assert.equal(index.status, 200);
-	assert.match(await index.text(), /<title>Nocturne Engine<\/title>/);
+	assert.match(await index.text(), /<title>Umbrella<\/title>/);
 	const missing = await get("/definitely/not/here");
 	assert.equal(missing.status, 404);
-	assert.match(await missing.text(), /Nocturne Engine/);
+	assert.match(await missing.text(), /Umbrella/);
 });
 
 test("tls ask endpoint", async () => {
