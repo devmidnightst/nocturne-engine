@@ -97,6 +97,78 @@ async function runFixture(transport) {
 	await context.close();
 }
 
+// a single websocket message sent after a quiet spell has to reach the server
+// on its own. epoxy 3.0.1 held it back until something else was written, which
+// is why nocturne routes websockets through libcurl when epoxy is selected.
+async function runLoneSend(transport) {
+	const { context, page } = await newShell(transport);
+	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "ws-lone.html")}`);
+	let title = "";
+	try {
+		await page.waitForFunction(
+			() => {
+				try {
+					return document.getElementById("frame").contentDocument?.title?.startsWith("lone ");
+				} catch {
+					return false;
+				}
+			},
+			null,
+			{ timeout: 30_000 }
+		);
+		title = await proxyFrame(page).title();
+	} catch {
+		title = "timed out";
+	}
+	const ms = Number(title.match(/^lone ok (\d+)ms/)?.[1] ?? Infinity);
+	ms < 1500 ? pass(`websocket lone send over ${transport} (${title.slice(8)})`) : fail(`websocket lone send over ${transport}: ${title}`);
+	await context.close();
+}
+
+// the fixture, like node and most servers, closes an idle keep alive connection
+// after 5 seconds. the next request has to open a fresh one, not hang on the
+// dead one. epoxy 3.0.1 hangs here, which is why libcurl is the default.
+async function runIdleReuse(transport, { knownBroken = false } = {}) {
+	const { context, page } = await newShell(transport);
+	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "child.html")}`);
+	await page.waitForFunction(() => document.getElementById("frame").contentDocument?.body?.innerText?.includes("child"), null, { timeout: 30_000 });
+	const frame = proxyFrame(page);
+	await frame.evaluate(() => fetch("/api/echo?warm=1").then((r) => r.text()));
+	await page.waitForTimeout(7000);
+	const res = await frame.evaluate(() =>
+		Promise.race([
+			fetch("/api/echo?after-idle=1").then((r) => `status ${r.status}`),
+			new Promise((r) => setTimeout(() => r("hung for 15s"), 15_000)),
+		])
+	);
+	const ok = res === "status 200";
+	if (ok) pass(`request after an idle keep alive over ${transport}`);
+	else if (knownBroken) console.log(`  \x1b[33mknown\x1b[0m request after an idle keep alive over ${transport}: ${res} (upstream epoxy bug)`);
+	else fail(`request after an idle keep alive over ${transport}: ${res}`);
+	await context.close();
+}
+
+// a page that leaves 20 requests hanging, then a page with 31 parallel requests.
+// scramjet never cancels the first page's requests, so before the abort on
+// unload in engine.js libcurl's per host connections stayed full and the
+// second page froze until the hanging ones timed out.
+async function runAbandoned(transport) {
+	const { context, page } = await newShell(transport);
+	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "hang.html")}`);
+	await page.waitForFunction(() => document.getElementById("frame").contentDocument?.title === "hang", null, { timeout: 30_000 });
+	await page.waitForTimeout(1000);
+	await page.fill("#address", fixtureUrl + "soak-heavy.html");
+	await page.press("#address", "Enter");
+	try {
+		await page.waitForFunction(() => document.getElementById("frame").contentDocument?.title === "heavy done", null, { timeout: 20_000 });
+		const res = JSON.parse(await proxyFrame(page).innerText("#results"));
+		res.bad === 0 ? pass(`page after abandoned requests loads over ${transport}`) : fail(`page after abandoned requests over ${transport}: ${JSON.stringify(res)}`);
+	} catch {
+		fail(`page after abandoned requests over ${transport}: stuck`);
+	}
+	await context.close();
+}
+
 async function runErrorPage() {
 	console.log("\nerror pages");
 	const { context, page } = await newShell("epoxy");
@@ -154,6 +226,15 @@ async function runRealSites() {
 try {
 	await runFixture("epoxy");
 	await runFixture("libcurl");
+	console.log("\nwebsocket timing");
+	await runLoneSend("epoxy");
+	await runLoneSend("libcurl");
+	console.log("\nkeep alive reuse");
+	await runIdleReuse("libcurl");
+	await runIdleReuse("epoxy", { knownBroken: true });
+	console.log("\nabandoned requests");
+	await runAbandoned("libcurl");
+	await runAbandoned("epoxy");
 	await runErrorPage();
 	await runBlocker();
 	await runRealSites();

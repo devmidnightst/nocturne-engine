@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>hang</title>
+	</head>
+	<body>
+		<p>leaves requests hanging</p>
+		<script>
+			// like a real page with long polls, event streams or requests to a host
+			// that never answers: the runner navigates away while these are in flight
+			for (var i = 0; i < 20; i++) fetch("/api/slow?ms=30000&n=" + i).catch(function () {});
+		</script>
+	</body>
+</html>

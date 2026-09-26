@@ -1,0 +1,50 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>soak heavy</title>
+	</head>
+	<body>
+		<h1>heavy page</h1>
+		<pre id="results">running</pre>
+		<script>
+			// a burst of parallel requests, a few big bodies checked byte for byte,
+			// and a request that gets abandoned mid flight when the runner navigates.
+			function verify(buf) {
+				var a = new Uint8Array(buf);
+				for (var i = 0; i < a.length; i += 4093) if (a[i] !== ((i * 31 + 7) & 0xff)) return false;
+				return true;
+			}
+			var jobs = [];
+			var named = function (name, p) {
+				return p.then(
+					function (ok) { return ok === true ? true : name + ": " + ok; },
+					function (e) { return name + ": " + (e && e.message ? e.message : e); }
+				);
+			};
+			for (var i = 0; i < 24; i++) jobs.push(named("echo" + i, fetch("/api/echo?n=" + i + "&r=" + Math.random()).then(function (r) { return r.json(); }).then(function (j) { return j.method === "GET"; })));
+			[64 * 1024, 1024 * 1024, 4 * 1024 * 1024].forEach(function (size) {
+				jobs.push(named("blob" + size, fetch("/api/blob?size=" + size).then(function (r) { return r.arrayBuffer(); }).then(function (b) { return b.byteLength === size && verify(b); })));
+			});
+			for (var k = 0; k < 4; k++) {
+				jobs.push(new Promise(function (resolve) {
+					var x = new XMLHttpRequest();
+					x.open("GET", "/api/echo?xhr=" + k);
+					x.onload = function () { resolve(x.status === 200); };
+					x.onerror = function () { resolve(false); };
+					x.send();
+				}));
+			}
+			// left hanging on purpose, the next navigation has to cancel it cleanly
+			fetch("/api/slow?ms=20000").catch(function () {});
+			Promise.all(jobs).then(function (r) {
+				var bad = r.filter(function (x) { return x !== true; });
+				document.getElementById("results").textContent = JSON.stringify({ total: r.length, bad: bad.length, which: bad.slice(0, 5) });
+				document.title = "heavy done";
+			}, function (e) {
+				document.getElementById("results").textContent = JSON.stringify({ error: String(e) });
+				document.title = "heavy done";
+			});
+		</script>
+	</body>
+</html>

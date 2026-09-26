@@ -1,0 +1,71 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>soak ws</title>
+	</head>
+	<body>
+		<h1>long lived websockets</h1>
+		<pre id="state">starting</pre>
+		<script>
+			// keeps two websockets open for as long as the page lives: one echo
+			// socket pinged every second, one socket the server pushes to every
+			// 500ms. the soak runner reads window.__soak to spot drops and gaps.
+			var s = { echoSent: 0, echoRecv: 0, echoLate: 0, echoOpens: 0, echoCloses: 0, pushRecv: 0, pushGaps: 0, pushOpens: 0, pushCloses: 0, maxRttMs: 0, lastRttMs: 0 };
+			window.__soak = s;
+			var pending = {};
+			function echo() {
+				var ws = new WebSocket("ws://" + location.host + "/ws");
+				var timer;
+				ws.onopen = function () {
+					s.echoOpens++;
+					timer = setInterval(function () {
+						var seq = ++s.echoSent;
+						pending[seq] = Date.now();
+						ws.send(JSON.stringify({ seq: seq, pad: "x".repeat(seq % 7 === 0 ? 60000 : 200) }));
+					}, 1000);
+				};
+				ws.onmessage = function (e) {
+					var d = JSON.parse(e.data);
+					if (d.seq && pending[d.seq]) {
+						var rtt = Date.now() - pending[d.seq];
+						delete pending[d.seq];
+						s.echoRecv++;
+						s.lastRttMs = rtt;
+						if (rtt > s.maxRttMs) s.maxRttMs = rtt;
+						if (rtt > 5000) s.echoLate++;
+					}
+				};
+				ws.onclose = function () {
+					s.echoCloses++;
+					clearInterval(timer);
+					setTimeout(echo, 1000);
+				};
+			}
+			function push() {
+				var ws = new WebSocket("ws://" + location.host + "/ws-stream");
+				var last = 0;
+				ws.onopen = function () {
+					s.pushOpens++;
+				};
+				ws.onmessage = function (e) {
+					var d = JSON.parse(e.data);
+					if (!d.push) return;
+					if (last && d.push !== last + 1) s.pushGaps++;
+					last = d.push;
+					s.pushRecv++;
+				};
+				ws.onclose = function () {
+					s.pushCloses++;
+					setTimeout(push, 1000);
+				};
+			}
+			echo();
+			push();
+			setInterval(function () {
+				s.pendingEcho = Object.keys(pending).length;
+				document.getElementById("state").textContent = JSON.stringify(s);
+			}, 1000);
+		</script>
+	</body>
+</html>

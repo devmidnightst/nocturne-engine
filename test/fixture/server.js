@@ -33,6 +33,23 @@ export function startFixture(port = 0) {
 			res.writeHead(200, { "content-type": "text/plain", "set-cookie": "nocturne_test=yes; Path=/" });
 			return res.end("ok");
 		}
+		if (url.pathname === "/api/blob") {
+			// deterministic bytes so the page can verify big bodies arrive intact
+			const size = Math.min(Number(url.searchParams.get("size")) || 1024, 16 * 1024 * 1024);
+			const buf = Buffer.alloc(size);
+			for (let i = 0; i < size; i++) buf[i] = (i * 31 + 7) & 0xff;
+			res.writeHead(200, { "content-type": "application/octet-stream", "content-length": size });
+			return res.end(buf);
+		}
+		if (url.pathname === "/api/slow") {
+			const ms = Math.min(Number(url.searchParams.get("ms")) || 1000, 30_000);
+			const t = setTimeout(() => {
+				res.writeHead(200, { "content-type": "text/plain" });
+				res.end("slow ok");
+			}, ms);
+			res.on("close", () => clearTimeout(t));
+			return;
+		}
 		if (url.pathname === "/redirect") {
 			res.writeHead(302, { location: "/api/echo?redirected=1" });
 			return res.end();
@@ -63,9 +80,23 @@ export function startFixture(port = 0) {
 			res.on("finish", () => socket.end());
 			return handler(req, res);
 		}
+		if (process.env.FIXTURE_DEBUG) console.log("[fixture] upgrade", req.url, JSON.stringify(req.headers));
 		wss.handleUpgrade(req, socket, head, (ws) => {
+			// epoxy sends the request target in absolute form (ws://host/path), which
+			// http allows and real servers accept, so only look at the path
+			if (new URL(req.url, "http://x").pathname === "/ws-stream") {
+				// server pushes on its own, like a chat gateway sending events
+				let seq = 0;
+				const t = setInterval(() => ws.send(JSON.stringify({ push: ++seq, at: Date.now() })), 500);
+				ws.on("close", () => clearInterval(t));
+				ws.on("message", (data) => ws.send(String(data)));
+				return;
+			}
 			ws.send(JSON.stringify({ hello: true, origin: req.headers.origin ?? null }));
-			ws.on("message", (data) => ws.send(String(data)));
+			ws.on("message", (data) => {
+				if (process.env.FIXTURE_DEBUG) console.log("[fixture] ws got", Date.now() % 100000, String(data).length);
+				ws.send(String(data));
+			});
 		});
 	});
 

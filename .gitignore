@@ -3,3 +3,4 @@ node_modules/
 *.log
 e2e-*.png
 .DS_Store
+soak-results/
