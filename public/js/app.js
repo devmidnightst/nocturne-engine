@@ -95,7 +95,7 @@ function showHome() {
 	setLoading(false);
 	updateBookmarkButton();
 	renderHomeLists();
-	document.title = "Nocturne Engine";
+	document.title = "Umbrella";
 	try {
 		ui.frame.src = "about:blank";
 	} catch {
@@ -160,7 +160,7 @@ const engineEvents = {
 	},
 	onTitle(title) {
 		currentTitle = title || "";
-		document.title = currentTitle ? `${currentTitle} | Nocturne` : "Nocturne Engine";
+		document.title = currentTitle ? `${currentTitle} | Umbrella` : "Umbrella";
 		if (currentUrl) history.setTitle(currentUrl, currentTitle);
 	},
 	onLoading: setLoading,
@@ -392,7 +392,7 @@ function renderDiag() {
 
 function renderAbout() {
 	const rows = [
-		["engine", "Nocturne Engine 1.0.0"],
+		["version", "Umbrella 1.0.0"],
 		["scramjet", `${versionInfo.version} (${versionInfo.build})`],
 		["controller", globalThis.$scramjetController.VERSION],
 		["transport", engine?.transportKind ?? settings.get().transport],
@@ -486,7 +486,6 @@ document.addEventListener("keydown", (e) => {
 async function boot() {
 	renderQuick();
 	renderHomeLists();
-	$("engine-version").textContent = `Nocturne Engine · scramjet ${versionInfo.version}`;
 
 	const go = new URLSearchParams(location.search).get("go");
 	if (go) pendingGo = resolveInput(go);
