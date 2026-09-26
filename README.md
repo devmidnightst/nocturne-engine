@@ -48,6 +48,7 @@ nocturne-engine/
   docs/
     PATCHES.md              every patch, why it exists, how it was proven
     DISCORD.md              discord notes and known limits
+    SOAK.md                 results of the 2 hour soak run
 ```
 
 ## setup
@@ -215,7 +216,7 @@ npm run test:soak                   # 30 minutes
 SOAK_MINUTES=120 npm run test:soak  # longer
 ```
 
-runs the server as its own process and keeps a real chromium on it the whole time: two shells navigating in a loop (fixture, a heavy page with 31 parallel requests and 5 MB of bodies checked byte for byte, redirects, error pages, and any `SOAK_URLS`), flipping transport and reloading every so often, plus one shell per transport holding websockets open for the entire run. every minute it records server rss, heap after gc, open fds, wisp connections, each shell's js heap and dom size and navigation latency, and at the end writes `soak-results/<time>/report.md` comparing the start of the run with the end.
+runs the server as its own process and keeps a real chromium on it the whole time: two shells navigating in a loop (fixture, a heavy page with 31 parallel requests and 5 MB of bodies checked byte for byte, redirects, error pages, and any `SOAK_URLS`), flipping transport and reloading every so often, plus one shell per transport holding websockets open for the entire run. every minute it records server rss, heap after gc, open fds, wisp connections, each shell's js heap and dom size and navigation latency, and at the end writes `soak-results/<time>/report.md` comparing the start of the run with the end. the last 2 hour run is in [docs/SOAK.md](docs/SOAK.md).
 
 ## version notes
 
