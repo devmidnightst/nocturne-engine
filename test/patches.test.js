@@ -37,7 +37,7 @@ test("a different libcurl-transport version is left untouched", () => {
 test("the patched libcurl bundle still parses", () => {
 	// a syntax error in a patch would only show up in the browser otherwise
 	const { code } = buildPatchedLibcurl();
-	const file = path.join(os.tmpdir(), `nocturne-libcurl-${process.pid}.mjs`);
+	const file = path.join(os.tmpdir(), `umbrella-libcurl-${process.pid}.mjs`);
 	fs.writeFileSync(file, code);
 	try {
 		assert.doesNotThrow(() => execFileSync(process.execPath, ["--check", file], { stdio: "pipe" }));

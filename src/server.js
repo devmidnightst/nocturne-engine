@@ -1,4 +1,4 @@
-// nocturne engine: http server.
+// umbrella: http server.
 //
 // serves the shell ui, the scramjet runtime (patched, see scramjet-patches.js),
 // the controller + transports, and the wisp websocket endpoint that the
@@ -41,7 +41,7 @@ const bundles = {
 	"/transports/libcurl.mjs": buildPatchedLibcurl(),
 };
 for (const [route, b] of Object.entries(bundles)) {
-	b.etag = `"nocturne-${Buffer.from(route).toString("base64url")}-${b.applied.length}-${b.code.length}"`;
+	b.etag = `"umbrella-${Buffer.from(route).toString("base64url")}-${b.applied.length}-${b.code.length}"`;
 }
 const patches = Object.fromEntries(
 	Object.entries(bundles).map(([route, b]) => [route, { applied: b.applied, skipped: b.skipped }])
@@ -71,11 +71,11 @@ const domains = createDomainAllowlist(config.domains);
 app.use((req, res, next) => {
 	res.setHeader("X-Content-Type-Options", "nosniff");
 	res.setHeader("Referrer-Policy", "same-origin");
-	res.setHeader("X-Nocturne-Engine", SCRAMJET_VERSION);
+	res.setHeader("X-Umbrella", SCRAMJET_VERSION);
 	next();
 });
 
-// engine assets: cors open so other nocturne subdomains can reuse them, and a
+// engine assets: cors open so other umbrella subdomains can reuse them, and a
 // short cache because the files only change when package.json pins change.
 const assetHeaders = (res, file) => {
 	res.setHeader("Access-Control-Allow-Origin", "*");
@@ -152,7 +152,7 @@ app.use((req, res) => {
 // eslint-disable-next-line no-unused-vars
 app.use((err, req, res, next) => {
 	const status = err.status || err.statusCode || 500;
-	if (status >= 500) console.error("[nocturne] request error", req.method, req.url, err);
+	if (status >= 500) console.error("[umbrella] request error", req.method, req.url, err);
 	if (res.headersSent) return;
 	if (status === 404) return res.status(404).sendFile(path.join(PUBLIC, "404.html"));
 	res.status(status).type("text/plain").send(status >= 500 ? "internal error" : String(err.message));
@@ -194,13 +194,13 @@ function main() {
 
 	server.listen(config.port, config.host, () => {
 		const where = `http://${config.host === "0.0.0.0" ? "localhost" : config.host}:${config.port}`;
-		console.log(`[nocturne] ${config.brand.name} listening on ${where}`);
+		console.log(`[umbrella] ${config.brand.name} listening on ${where}`);
 		for (const [route, b] of Object.entries(bundles)) {
-			console.log(`[nocturne] ${route}: ${b.applied.length} patches (${b.applied.join(", ") || "none"})`);
-			for (const s of b.skipped) console.warn(`[nocturne] patch skipped in ${route}: ${s.id} (${s.reason})`);
+			console.log(`[umbrella] ${route}: ${b.applied.length} patches (${b.applied.join(", ") || "none"})`);
+			for (const s of b.skipped) console.warn(`[umbrella] patch skipped in ${route}: ${s.id} (${s.reason})`);
 		}
 		if (!config.domains.allow.length && !config.domains.file)
-			console.log("[nocturne] tls ask endpoint has no domains configured, it will refuse everything");
+			console.log("[umbrella] tls ask endpoint has no domains configured, it will refuse everything");
 		// tell pm2 we are ready (wait_ready: true in ecosystem.config.cjs)
 		process.send?.("ready");
 	});
@@ -210,7 +210,7 @@ function main() {
 	const shutdown = (signal) => {
 		if (closing) return;
 		closing = true;
-		console.log(`[nocturne] ${signal}, closing`);
+		console.log(`[umbrella] ${signal}, closing`);
 		server.close(() => process.exit(0));
 		server.closeIdleConnections?.();
 		setTimeout(() => process.exit(0), 8000).unref();
@@ -218,7 +218,7 @@ function main() {
 	// node exits on an unhandled rejection by default. for a proxy that means one
 	// odd upstream packet drops every user, so log it and keep serving instead.
 	process.on("unhandledRejection", (reason) => {
-		console.error("[nocturne] unhandled rejection", reason);
+		console.error("[umbrella] unhandled rejection", reason);
 	});
 
 	process.on("SIGINT", () => shutdown("SIGINT"));

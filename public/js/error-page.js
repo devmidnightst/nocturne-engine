@@ -1,15 +1,6 @@
-// nocturne engine: branded error pages rendered inside the proxy frame.
-//
-// stock scramjet answers a failed navigation with a bare "Internal Service
-// Worker Error" string. these pages say what actually went wrong and give the
-// user something to click. they talk to the shell with postMessage.
-
 const escape = (s) =>
 	String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
 
-// ordered, first match wins. libcurl reports curl error codes, epoxy reports
-// hyper errors. both collapse most network failures into "the stream closed",
-// which is what /api/diagnose is for (see diagnoseKind below).
 const KINDS = [
 	{
 		id: "dns",
@@ -55,9 +46,6 @@ const UNKNOWN = {
 	hint: "something went wrong while fetching the page.",
 };
 
-// transport errors that only mean "the connection went away", where asking the
-// server what happened gives a much better answer
-// (a wisp stream the server closes mid tls handshake shows up as "handshake eof")
 const AMBIGUOUS =
 	/(IncompleteMessage|connection closed before message completed|handshake eof|UnexpectedEof|error code (7|35|52|55|56):|Could not connect)/i;
 
@@ -78,9 +66,6 @@ const DIAGNOSED = {
 	unreachable: "refused",
 };
 
-// asks the nocturne server to repeat the dns + tcp part of the connection.
-// resolves to a kind, or null when the site is reachable (so the failure is
-// somewhere in tls / http and the transport's own message is the best we have)
 export async function diagnoseKind(targetUrl) {
 	let url;
 	try {
@@ -129,7 +114,6 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--b
 button.primary:hover{filter:brightness(1.08)}
 `;
 
-// markup is injected with the target url as data, never as script source
 export function renderErrorPage({ url, error, kind = classifyError(error), status = 502 }) {
 	const detail = String(error?.stack || error?.message || error || "").slice(0, 1500);
 	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
@@ -148,7 +132,7 @@ export function renderErrorPage({ url, error, kind = classifyError(error), statu
 <details><summary>technical details</summary><code>${escape(kind.id)}: ${escape(detail)}</code></details>
 </main>
 <script>
-const send = (action) => parent.postMessage({ __nocturne: action }, location.origin);
+const send = (action) => parent.postMessage({ __umbrella: action }, location.origin);
 document.getElementById("retry").onclick = () => location.reload();
 document.getElementById("transport").onclick = () => send("switch-transport");
 document.getElementById("home").onclick = () => send("home");

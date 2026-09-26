@@ -12,7 +12,7 @@ summary: 20,588 navigations with 0 failures, 0 crashes, server memory, fds and w
 
 ## known, not fixed here
 
-every navigation keeps the old proxied window alive in the shell tab (about 0.7 windows and 0.8 MB of js heap per navigation, measured with heap snapshots). it happens on main with the original engine too, so it looks like scramjet or chromium, not nocturne's plugins. the soak reloads each shell every 60 navigations, which is why its heap stays flat above. a user who clicks through a few hundred pages in one tab without reloading will see the tab grow; single page apps like discord don't navigate, so they don't hit it.
+every navigation keeps the old proxied window alive in the shell tab (about 0.7 windows and 0.8 MB of js heap per navigation, measured with heap snapshots). it happens on main with the original engine too, so it looks like scramjet or chromium, not umbrella's plugins. the soak reloads each shell every 60 navigations, which is why its heap stays flat above. a user who clicks through a few hundred pages in one tab without reloading will see the tab grow; single page apps like discord don't navigate, so they don't hit it.
 
 ## the report
 

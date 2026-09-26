@@ -1,11 +1,11 @@
-# discord on nocturne engine
+# discord on umbrella
 
 ## honest status
 
 discord **was not tested live** while this was built. the build machine's outbound network blocked discord.com, so no real discord session was ever loaded through it. what was tested is a local fixture that copies the behaviour discord depended on, in real chromium, over both transports. the first thing to do on the vps:
 
 ```sh
-NOCTURNE_E2E_URLS=https://discord.com/login,https://discord.com/app npm run test:e2e
+UMBRELLA_E2E_URLS=https://discord.com/login,https://discord.com/app npm run test:e2e
 ```
 
 that loads each url through the proxy, waits 15s, and saves a screenshot (`e2e-discord.com.png`). it needs the dev dependencies (plain `npm ci`) and a chromium binary. set `CHROME_PATH` if playwright can't find one.
@@ -32,11 +32,11 @@ see [PATCHES.md](PATCHES.md) for the details.
 - **voice, video and screen share don't go through the proxy.** they use webrtc (udp to discord's media servers), and scramjet 2.x doesn't tunnel webrtc. they'll either fail or connect straight from the user's own ip. text, dms, servers, images and embeds all go over http and the gateway websocket, so those go through the proxy.
 - **login checks.** discord sees your vps ip, not the user's. a login from a datacenter ip often gets an hcaptcha, and sometimes a "new login location" email or a phone check. hcaptcha runs through the proxy like any other page, but it scores datacenter traffic harshly, so expect more challenges than on a home connection.
 - **bandwidth.** avatars, attachments and emoji from `cdn.discordapp.com` and `media.discordapp.net` all go through your server. a busy discord tab can be a steady stream of traffic.
-- **one account per browser profile.** proxied cookies live in the user's browser under the nocturne origin, so two tabs share one discord session, same as normal.
+- **one account per browser profile.** proxied cookies live in the user's browser under the umbrella origin, so two tabs share one discord session, same as normal.
 
 ## when something breaks
 
 1. switch transport (settings, or the button on the error page or banner). epoxy and libcurl have different tls and http stacks, and a site that breaks on one often works on the other.
 2. turn on compat mode for discord.com from the recovery banner. it disables the two most involved rewrites for that origin only.
-3. turn on "rewriter logs" under developer settings and check the browser console. `__nocturneDiag` in the console shows rewriter error counts and the last few errors.
-4. `NOCTURNE_DISABLE_PATCHES=all npm start` serves stock scramjet. if the bug is still there, it's upstream. [open an issue with scramjet](https://github.com/MercuryWorkshop/scramjet/issues).
+3. turn on "rewriter logs" under developer settings and check the browser console. `__umbrellaDiag` in the console shows rewriter error counts and the last few errors.
+4. `UMBRELLA_DISABLE_PATCHES=all npm start` serves stock scramjet. if the bug is still there, it's upstream. [open an issue with scramjet](https://github.com/MercuryWorkshop/scramjet/issues).

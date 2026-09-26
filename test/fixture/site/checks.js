@@ -247,7 +247,7 @@
 					return r.json();
 				})
 				.then(function (j) {
-					var ok = (j.cookie || "").indexOf("nocturne_test=yes") !== -1 && document.cookie.indexOf("nocturne_test=yes") !== -1;
+					var ok = (j.cookie || "").indexOf("umbrella_test=yes") !== -1 && document.cookie.indexOf("umbrella_test=yes") !== -1;
 					return ok ? true : { server: j.cookie, doc: document.cookie };
 				});
 		}),

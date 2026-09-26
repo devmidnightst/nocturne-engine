@@ -1,4 +1,4 @@
-// nocturne engine soak test.
+// umbrella soak test.
 //
 //   npm run test:soak                      30 minutes
 //   SOAK_MINUTES=120 npm run test:soak     longer
@@ -21,7 +21,7 @@
 //   SOAK_SAMPLE_SECONDS   metrics interval (default 30)
 //   SOAK_URLS             comma separated real urls to mix into the loop
 //   SOAK_OUT              results folder (default soak-results/<timestamp>)
-//   NOCTURNE_E2E_EXTRA_CA pem bundle for networks that re-sign tls
+//   UMBRELLA_E2E_EXTRA_CA pem bundle for networks that re-sign tls
 //   CHROME_PATH           chromium binary
 
 import fs from "node:fs";
@@ -87,7 +87,7 @@ function startServer() {
 			fs.appendFileSync(path.join(OUT, "server.log"), d);
 			for (const line of String(d).split("\n")) {
 				// the boot log lists patch names like "rewrite-error-report", skip those
-				if (line.startsWith("[nocturne] /")) continue;
+				if (line.startsWith("[umbrella] /")) continue;
 				if (/error|unhandled|uncaught|FATAL/i.test(line)) serverErrors.push(line.slice(0, 300));
 			}
 		});
@@ -126,7 +126,7 @@ function serverFds() {
 	}
 }
 // established tcp connections whose local end is the server port, i.e. every
-// websocket (and keep alive http) the browser holds open to nocturne
+// websocket (and keep alive http) the browser holds open to umbrella
 function wispConnections() {
 	const hexPort = PORT.toString(16).toUpperCase().padStart(4, "0");
 	let n = 0;
@@ -158,10 +158,10 @@ async function newShell(name, transport) {
 	const context = await browser.newContext();
 	await context.addInitScript((t) => {
 		// only seed settings on the very first load, so transport flips stick across reloads
-		if (!localStorage.getItem("nocturne:settings"))
-			localStorage.setItem("nocturne:settings", JSON.stringify({ transport: t, blockAds: true }));
+		if (!localStorage.getItem("umbrella:settings"))
+			localStorage.setItem("umbrella:settings", JSON.stringify({ transport: t, blockAds: true }));
 	}, transport);
-	const extraCa = process.env.NOCTURNE_E2E_EXTRA_CA;
+	const extraCa = process.env.UMBRELLA_E2E_EXTRA_CA || process.env.NOCTURNE_E2E_EXTRA_CA;
 	if (extraCa) {
 		const pem = fs.readFileSync(extraCa, "utf8");
 		await context.route("**/transports/epoxy.mjs", async (route) => {
@@ -214,7 +214,7 @@ const TARGETS = [
 	{ kind: "heavy", url: FIX + "soak-heavy.html", done: (d) => d.title === "heavy done" },
 	{ kind: "child", url: FIX + "child.html", done: (d) => d.readyState === "complete" && d.body?.innerText?.includes("child") },
 	{ kind: "redirect", url: FIX + "redirect", done: (d) => d.readyState === "complete" && d.body?.innerText?.includes("redirected") },
-	{ kind: "error", url: "http://nocturne-soak-does-not-exist.invalid/", done: (d) => d.title?.includes("Umbrella") },
+	{ kind: "error", url: "http://umbrella-soak-does-not-exist.invalid/", done: (d) => d.title?.includes("Umbrella") },
 	...REAL.map((url) => ({ kind: "real", url, done: (d) => d.readyState === "complete" && d.title && !d.title.includes("Umbrella") })),
 ];
 
@@ -297,7 +297,7 @@ async function navigate(shell, target) {
 }
 
 // the settings select is only filled in when the panel opens, so read the store
-const currentTransport = () => JSON.parse(localStorage.getItem("nocturne:settings") || "{}").transport || "libcurl";
+const currentTransport = () => JSON.parse(localStorage.getItem("umbrella:settings") || "{}").transport || "libcurl";
 
 async function flipTransport(shell) {
 	const to = await shell.page.evaluate(async (current) => {
@@ -337,7 +337,7 @@ async function loop(shell, offset) {
 		i++;
 		// libcurl has no way to trust an extra ca, so on re-signing networks real
 		// sites only work over epoxy. skip them instead of counting fake failures.
-		if (target.kind === "real" && process.env.NOCTURNE_E2E_EXTRA_CA) {
+		if (target.kind === "real" && (process.env.UMBRELLA_E2E_EXTRA_CA || process.env.NOCTURNE_E2E_EXTRA_CA)) {
 			const kind = await shell.page.evaluate(currentTransport).catch(() => "epoxy");
 			if (kind === "libcurl") continue;
 		}
@@ -452,7 +452,7 @@ const trend = (label, fn, unit, div = 1) => {
 };
 
 const lines = [];
-lines.push(`# nocturne engine soak report`, "");
+lines.push(`# umbrella soak report`, "");
 lines.push(`- duration: ${MINUTES} minutes, ${navCount} navigations, ${samples.length} samples`);
 lines.push(`- server restarts (crashes): ${serverExits}`);
 lines.push(`- server log lines that look like errors: ${serverErrors.length}`);

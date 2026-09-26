@@ -1,22 +1,22 @@
 # scramjet patches
 
-nocturne serves patched copies of four published bundles. the scramjet patches live in `src/scramjet-patches.js`, the libcurl transport patches in `src/libcurl-patches.js`. they're applied once when the server boots, and the result is served from memory.
+umbrella serves patched copies of four published bundles. the scramjet patches live in `src/scramjet-patches.js`, the libcurl transport patches in `src/libcurl-patches.js`. they're applied once when the server boots, and the result is served from memory.
 
 how the patches stay safe:
 
 - every edit is an exact string swap against the published alpha.2 build, and it has to match **exactly once** or it's skipped. a patch can't half apply or land in the wrong place.
 - if the installed scramjet isn't `2.0.67-alpha.2`, every scramjet patch is skipped and the stock bundle is served. same for libcurl-transport and `2.0.5`.
 - `npm run check`, the server log at boot and `/api/health` all list which patches applied and which were skipped, with the reason.
-- `NOCTURNE_DISABLE_PATCHES=all` (or a comma list of ids) serves stock code, so you can check whether a broken site is a patch problem or an upstream one.
+- `UMBRELLA_DISABLE_PATCHES=all` (or a comma list of ids) serves stock code, so you can check whether a broken site is a patch problem or an upstream one.
 - the source map comment is stripped from patched bundles, because the map no longer lines up with the patched file.
 
-the e2e suite (`npm run test:e2e`) was run with `NOCTURNE_DISABLE_PATCHES=all` to confirm that each bug fix below fails on stock scramjet.
+the e2e suite (`npm run test:e2e`) was run with `UMBRELLA_DISABLE_PATCHES=all` to confirm that each bug fix below fails on stock scramjet.
 
 ## scramjet.js
 
 ### `wasm-module-cache`
 
-`getRewriter()` compiled a fresh `WebAssembly.Module` from the 586kb rewriter wasm on every js rewrite, even though `initSync` only ever uses the first one. nocturne caches the compiled module. in a local benchmark each rewrite call got about 3x faster, and that adds up on js heavy sites like discord and youtube that ship hundreds of chunks.
+`getRewriter()` compiled a fresh `WebAssembly.Module` from the 586kb rewriter wasm on every js rewrite, even though `initSync` only ever uses the first one. umbrella caches the compiled module. in a local benchmark each rewrite call got about 3x faster, and that adds up on js heavy sites like discord and youtube that ship hundreds of chunks.
 
 ### `keyword-glue` ([scramjet #185](https://github.com/MercuryWorkshop/scramjet/issues/185))
 
@@ -30,7 +30,7 @@ tested by `test/patches.test.js`, which runs the real rewriter, and by the "keyw
 
 ### `rewrite-error-report`
 
-when a script fails to rewrite, stock scramjet `console.warn`s the entire script source. on a 2mb bundle that freezes devtools. nocturne cuts the dump to 400 characters and passes the failure to the recovery plugin, which is what drives the "this page had rewriter errors" banner. `self.__nocturneDiag` keeps counts and the last few errors for the diagnostics panel.
+when a script fails to rewrite, stock scramjet `console.warn`s the entire script source. on a 2mb bundle that freezes devtools. umbrella cuts the dump to 400 characters and passes the failure to the recovery plugin, which is what drives the "this page had rewriter errors" banner. `self.__umbrellaDiag` keeps counts and the last few errors for the diagnostics panel.
 
 ### `module-worker-imports`
 
@@ -50,7 +50,7 @@ same bug as #184, in `XMLHttpRequest.prototype.getResponseHeader`.
 
 ### `media-src-readback`
 
-players attach media source extensions with `audio.src = URL.createObjectURL(mediaSource)`. scramjet hooks `createObjectURL` to hand back a blob url on the site's origin, but reading `audio.src` back returned the real blob url on nocturne's origin, so `audio.src === url` was false. `audio.currentSrc` wasn't hooked at all and returned the `/~/sj/` proxy url. players compare these to tell whether the element is still theirs. both getters now return what the site set.
+players attach media source extensions with `audio.src = URL.createObjectURL(mediaSource)`. scramjet hooks `createObjectURL` to hand back a blob url on the site's origin, but reading `audio.src` back returned the real blob url on umbrella's origin, so `audio.src === url` was false. `audio.currentSrc` wasn't hooked at all and returned the `/~/sj/` proxy url. players compare these to tell whether the element is still theirs. both getters now return what the site set.
 
 tested by the "media element src reads back what was set" and "currentSrc is the real url" e2e checks.
 

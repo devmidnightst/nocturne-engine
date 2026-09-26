@@ -23,7 +23,7 @@ test("rejects junk", () => {
 });
 
 test("domains file is re-read when it changes", async () => {
-	const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "nocturne-")), "domains.txt");
+	const file = path.join(fs.mkdtempSync(path.join(os.tmpdir(), "umbrella-")), "domains.txt");
 	fs.writeFileSync(file, "one.com\n# comment\n");
 	const a = createDomainAllowlist({ file });
 	assert.equal(a.isAllowed("one.com"), true);

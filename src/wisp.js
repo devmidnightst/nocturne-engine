@@ -1,4 +1,4 @@
-// nocturne engine: the wisp websocket endpoint.
+// umbrella: the wisp websocket endpoint.
 //
 // wraps wisp-js 0.5.0's ServerConnection and fixes the things in it that let a
 // single client hurt the server (every one was reproduced before fixing):
@@ -101,7 +101,7 @@ export function createWispHandler(cfg) {
 
 		const open = Object.values(conn.streams).filter((s) => s !== self);
 		if (cfg.streamLimitTotal !== -1 && open.length >= cfg.streamLimitTotal) return [close_reasons.ConnThrottled];
-		if (cfg.streamLimitPerHost !== -1 && open.filter((s) => s.nocturneHost === hostname).length >= cfg.streamLimitPerHost)
+		if (cfg.streamLimitPerHost !== -1 && open.filter((s) => s.umbrellaHost === hostname).length >= cfg.streamLimitPerHost)
 			return [close_reasons.ConnThrottled];
 
 		let candidates;
@@ -120,7 +120,7 @@ export function createWispHandler(cfg) {
 		return [0, parseIp(ok).toString()];
 	}
 
-	class NocturneConnection extends ServerConnection {
+	class UmbrellaConnection extends ServerConnection {
 		create_stream(stream_id, type, hostname, port) {
 			// a CONNECT for a live id: close the old stream's socket, don't orphan it
 			const old = this.streams[stream_id];
@@ -134,7 +134,7 @@ export function createWispHandler(cfg) {
 			// placeholder so data sent before the connect finishes is buffered like
 			// upstream does. the real socket is swapped in once the address is vetted.
 			const stream = new wisp.ServerStream(stream_id, this, new SocketImpl(hostname, port));
-			stream.nocturneHost = hostname;
+			stream.umbrellaHost = hostname;
 			this.streams[stream_id] = stream;
 
 			(async () => {
@@ -172,7 +172,7 @@ export function createWispHandler(cfg) {
 			if (!stream) return;
 			delete this.streams[stream_id];
 			this.detach(stream);
-			if (reason && !quiet) logging.info(`(${this.conn_id}) closing stream to ${stream.nocturneHost} for reason ${reason}`);
+			if (reason && !quiet) logging.info(`(${this.conn_id}) closing stream to ${stream.umbrellaHost} for reason ${reason}`);
 			await stream.close(reason);
 		}
 
@@ -200,7 +200,7 @@ export function createWispHandler(cfg) {
 			// listener the ws library throws and takes the process down.
 			ws.on("error", (err) => logging.info(`wisp websocket error - ${err.code || err.message}`));
 			const wantsV2 = !!req.headers["sec-websocket-protocol"] && options.wisp_version === 2;
-			const conn = new NocturneConnection(ws, req.url, { wisp_version: wantsV2 ? 2 : 1 });
+			const conn = new UmbrellaConnection(ws, req.url, { wisp_version: wantsV2 ? 2 : 1 });
 			(async () => {
 				await conn.setup();
 				await conn.run();

@@ -1,4 +1,4 @@
-// nocturne engine: allowlist for caddy's on_demand_tls "ask" endpoint.
+// umbrella: allowlist for caddy's on_demand_tls "ask" endpoint.
 //
 // caddy calls GET /api/tls-ask?domain=<host> before issuing a certificate.
 // a 200 means yes, anything else means no. without this check anyone could point

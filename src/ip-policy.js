@@ -1,4 +1,4 @@
-// nocturne engine: which addresses the proxy may connect to (the ssrf guard).
+// umbrella: which addresses the proxy may connect to (the ssrf guard).
 //
 // wisp-js 0.5.0 has its own check, but it looks at ipaddr.js range names as
 // is, so an ipv4 address wrapped in ipv6 (::ffff:127.0.0.1, 64:ff9b::a9fe:a9fe)

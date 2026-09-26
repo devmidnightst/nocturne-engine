@@ -19,7 +19,7 @@ const bad = (msg) => {
 	console.log(`  FAIL  ${msg}`);
 };
 
-console.log("nocturne engine install check\n");
+console.log("umbrella install check\n");
 
 const sj = version("@mercuryworkshop/scramjet");
 sj === SCRAMJET_VERSION ? ok(`scramjet ${sj}`) : bad(`scramjet is ${sj}, patches target ${SCRAMJET_VERSION}`);

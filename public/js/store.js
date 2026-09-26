@@ -1,8 +1,14 @@
-// nocturne engine: tiny persistent store for settings, bookmarks and history.
-// everything lives in localStorage under "nocturne:" keys. every access is
-// wrapped because storage can throw (private mode, blocked site data).
+const PREFIX = "umbrella:";
+const OLD_PREFIX = "nocturne:";
 
-const PREFIX = "nocturne:";
+try {
+	for (const key of Object.keys(localStorage)) {
+		if (!key.startsWith(OLD_PREFIX)) continue;
+		const name = PREFIX + key.slice(OLD_PREFIX.length);
+		if (localStorage.getItem(name) == null) localStorage.setItem(name, localStorage.getItem(key));
+		localStorage.removeItem(key);
+	}
+} catch {}
 
 function read(key, fallback) {
 	try {
@@ -17,7 +23,6 @@ function write(key, value) {
 	try {
 		localStorage.setItem(PREFIX + key, JSON.stringify(value));
 	} catch {
-		// storage full or blocked, settings just will not persist
 	}
 }
 
@@ -30,15 +35,12 @@ export const SEARCH_ENGINES = {
 };
 
 const DEFAULT_SETTINGS = {
-	// "libcurl" | "epoxy". libcurl is the default because epoxy 3.0.1 hangs on
-	// the first request after a site closes an idle keep alive connection (most
-	// servers do that after 5 to 75 seconds), see README "transports"
 	transport: "libcurl",
-	wispUrl: "", // empty means same origin /wisp/
+	wispUrl: "",
 	searchEngine: "duckduckgo",
 	blockAds: true,
 	rewriterLogs: false,
-	compatSites: [], // origins running in compat mode, see engine.js
+	compatSites: [],
 };
 
 const listeners = new Set();

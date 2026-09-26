@@ -1,4 +1,4 @@
-// nocturne engine: fixes for the websocket side of libcurl-transport 2.0.5.
+// umbrella: fixes for the websocket side of libcurl-transport 2.0.5.
 //
 // every proxied websocket goes through libcurl (with epoxy picked, engine.js
 // still hands sockets to libcurl), so these decide how every socket closes.
@@ -142,6 +142,6 @@ export function buildPatchedLibcurl(source, version) {
 		};
 	}
 	let code = applyPatches(source, LIBCURL_PATCHES, applied, skipped);
-	code = `/* patched by nocturne engine: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
+	code = `/* patched by umbrella: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
 	return { code, applied, skipped };
 }

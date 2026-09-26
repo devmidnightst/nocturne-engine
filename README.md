@@ -1,13 +1,13 @@
-# nocturne engine
+# umbrella
 
-a scramjet 2.x web proxy with a patched rewriter, a glass ui and a node server that's ready for pm2 cluster mode behind caddy.
+a scramjet 2.x web proxy with a patched rewriter, a plain ui and a node server that's ready for pm2 cluster mode behind caddy.
 
 it's built on the pinned 2.x packages (scramjet `2.0.67-alpha.2`, scramjet-controller `0.0.14`, scramjet-utils `0.0.3`), with epoxy and libcurl both selectable in settings, and wisp-js serving the tunnel from the same express process.
 
 what makes it better than the stock scramjet demos:
 
 - **eleven patches to the 2.x bundles** fix real bugs, and the e2e suite fails on stock scramjet for every one of them it covers. two are aimed right at discord: websockets where the server talks first (the gateway), and set-cookie getting dropped by the http cache. details are in [docs/PATCHES.md](docs/PATCHES.md).
-- **error pages that say what actually broke**. stock scramjet shows "Internal Service Worker Error" for everything. nocturne tells you whether the domain doesn't exist, the server blocked it, the site refused, it timed out or tls failed. it asks the server to redo the dns and tcp step when the transport's own error is too vague.
+- **error pages that say what actually broke**. stock scramjet shows "Internal Service Worker Error" for everything. umbrella tells you whether the domain doesn't exist, the server blocked it, the site refused, it timed out or tls failed. it asks the server to redo the dns and tcp step when the transport's own error is too vague.
 - **recovery**. when a page throws rewriter errors or loads blank, a banner offers a reload, compat mode for that site, or switching transport.
 - **optional ad and tracker blocking**, answered locally inside the proxied page, plus discord's telemetry endpoints.
 - **custom domains** with caddy on_demand_tls and an allowlist endpoint, so nobody can make your box request certs for random hostnames.
@@ -35,13 +35,13 @@ nocturne-engine/
   public/                   the shell ui
     index.html              omnibox, frame, settings / history / bookmarks panel
     sw.js                   service worker, hands /~/sj/ requests to the controller
-    css/nocturne.css        glass theme, mobile bottom sheet under 640px
+    css/umbrella.css        plain light/dark theme, bottom sheet menu under 640px
     js/engine.js            scramjet controller wiring, transports, plugins, compat flags
     js/app.js               ui logic
     js/store.js             settings, bookmarks, history (localStorage)
     js/omnibox.js           url vs search detection
     js/error-page.js        error classification + branded error pages
-    js/plugins/             nocturne frame plugins + blocklist
+    js/plugins/             umbrella frame plugins + blocklist
   test/                     unit tests + a fixture site that exercises the rewriter
   scripts/e2e.mjs           real chromium end to end suite
   scripts/soak.mjs          long running stability test (npm run test:soak)
@@ -91,7 +91,20 @@ git pull && npm ci --omit=dev && npm run check && pm2 reload ecosystem.config.cj
 
 `pm2 reload` is zero downtime. every worker calls `process.send("ready")` once it's listening (`wait_ready`), so pm2 only kills the old worker after the new one is up. on shutdown a worker stops taking connections and gives open wisp tunnels a few seconds before exiting.
 
-cluster mode is safe. a wisp websocket stays on whichever worker accepted it, and all proxy state (cookies, cache, rewriting) lives in the browser, so there's nothing to share between workers. `NOCTURNE_INSTANCES` sets the worker count (default `max`). on the 12 core gcore box, something like 8 leaves room for caddy.
+cluster mode is safe. a wisp websocket stays on whichever worker accepted it, and all proxy state (cookies, cache, rewriting) lives in the browser, so there's nothing to share between workers. `UMBRELLA_INSTANCES` sets the worker count (default `max`). on the 12 core gcore box, something like 8 leaves room for caddy.
+
+### coming from nocturne engine
+
+this project used to be called nocturne engine. the pm2 app is now called `umbrella`, so the first deploy after the rename has to swap the process once instead of a plain reload (a few seconds of downtime):
+
+```sh
+git pull && npm ci --omit=dev && npm run check
+pm2 delete nocturne-engine
+pm2 start ecosystem.config.cjs
+pm2 save
+```
+
+after that, normal `pm2 reload ecosystem.config.cjs` updates work again. old `NOCTURNE_*` env vars are still read as a fallback, and settings, bookmarks and history saved in browsers under the old `nocturne:` keys move to `umbrella:` on the next visit.
 
 ### caddy
 
@@ -119,12 +132,12 @@ all in `.env.example` with comments. the important ones:
 | `WISP_STREAM_LIMIT_PER_HOST` | `-1` | caps streams per destination host on one wisp connection. used to crash the server, safe now |
 | `WISP_MAX_FRAME_BYTES` | `4194304` | biggest websocket frame a client may send to `/wisp/` |
 | `TLS_ALLOWED_DOMAINS` | empty | who caddy may get certs for |
-| `NOCTURNE_DISABLE_PATCHES` | empty | `all` or a list of patch ids, for debugging |
+| `UMBRELLA_DISABLE_PATCHES` | empty | `all` or a list of patch ids, for debugging |
 
 ## how it fits together
 
 ```
-browser tab (nocturne shell, /)
+browser tab (umbrella shell, /)
   |-- iframe /~/sj/<encoded url>         the proxied site
   |      every request from it goes to...
   |-- service worker (sw.js)             only routes /~/sj/ requests...
@@ -172,10 +185,10 @@ scramjet 2.x also never cancels a request when a page is left (the controller pa
 
 scramjet-utils plugins in use: `HttpCachePlugin` (patched, see below), `UrlWatcherPlugin` (keeps the omnibox in sync) and `CatchEscapedLinksPlugin` (a link that escapes the proxy gets routed back through `/?go=`).
 
-nocturne's own, in `public/js/plugins/nocturne-plugins.js`:
+umbrella's own, in `public/js/plugins/umbrella-plugins.js`:
 
 - **ErrorPagePlugin**: replaces a failed navigation with a branded page. transports report most failures as "the connection closed", so for vague errors it calls `/api/diagnose`, which redoes the dns lookup and a tcp connect with the same ip rules as wisp and reports `dns`, `blocked`, `refused`, `timeout` or `reachable`. the page has retry, switch transport and home buttons.
-- **ContentBlockerPlugin**: when "block ads & trackers" is on, requests to ad and analytics hosts (plus discord's `/api/v*/science` and `/metrics`, and youtube's ad pings) are answered locally with an empty response of the right type, so ad loaders don't retry in a loop. it never blocks top level navigations. it only runs inside proxied pages, so ads on the nocturne shell itself aren't touched.
+- **ContentBlockerPlugin**: when "block ads & trackers" is on, requests to ad and analytics hosts (plus discord's `/api/v*/science` and `/metrics`, and youtube's ad pings) are answered locally with an empty response of the right type, so ad loaders don't retry in a loop. it never blocks top level navigations. it only runs inside proxied pages, so ads on the umbrella shell itself aren't touched.
 - **RecoveryPlugin**: counts uncaught errors, rejections and rewriter failures in each proxied window. 3.5s after load it reports whether the page looks blank, and the shell shows the recovery banner.
 - **ShellBridgePlugin**: title, loading bar and url updates for the ui.
 
@@ -206,9 +219,9 @@ the e2e suite starts the server and a local fixture site, then loads the fixture
 - keyword glue, `setAttribute` coercion, a same origin child iframe
 - audio playback (test/fixture/site/media.html): `<audio>` with range requests and seeking, media source extensions fed from fetch, xhr, a streamed body and a binary POST (how youtube music streams), range requests after a cached full download (how spotify fetches audio), live streams, web audio, eme clearkey and the media element `src`/`currentSrc` getters
 
-it also checks the error page and the ad blocker. `NOCTURNE_E2E_URLS=https://a.com,https://b.com` adds real site smoke tests with screenshots. `CHROME_PATH` points it at a chromium binary if playwright can't find one.
+it also checks the error page and the ad blocker. `UMBRELLA_E2E_URLS=https://a.com,https://b.com` adds real site smoke tests with screenshots. `CHROME_PATH` points it at a chromium binary if playwright can't find one.
 
-`NOCTURNE_DISABLE_PATCHES=all npm run test:e2e` shows what stock scramjet fails.
+`UMBRELLA_DISABLE_PATCHES=all npm run test:e2e` shows what stock scramjet fails.
 
 ### soak test
 
@@ -225,7 +238,7 @@ checked on npm when this was built:
 
 - `@mercuryworkshop/scramjet@2.0.67-alpha.2` is the `alpha` tag. `latest` is still `1.1.0`, so a plain `npm i @mercuryworkshop/scramjet` gets you 1.x. the pin has to stay exact.
 - `scramjet-controller@0.0.14` is `latest` and hard codes that it wants scramjet `2.0.67-alpha.2`. mismatch them and it throws on boot. `npm run check` catches this.
-- `scramjet-utils@0.0.3` was built against scramjet `2.0.67-alpha.1` and controller `0.0.13`. its plugins work fine with alpha.2, but its `getScramjet()` and `getVersionInfo()` helpers throw a version mismatch, so nocturne doesn't call them.
+- `scramjet-utils@0.0.3` was built against scramjet `2.0.67-alpha.1` and controller `0.0.13`. its plugins work fine with alpha.2, but its `getScramjet()` and `getVersionInfo()` helpers throw a version mismatch, so umbrella doesn't call them.
 - `epoxy-transport@3.0.1` and `libcurl-transport@2.0.5` are both `latest` and implement the 2.x `ProxyTransport` interface. heads up: epoxy's readme says `import { EpoxyClient }`, but the actual build only has a default export (`EpoxyTransport`). libcurl exports `LibcurlClient`.
 - `wisp-js@0.5.0` is `latest`.
 - no bare-mux. scramjet 2.x doesn't use it (see above).
@@ -239,7 +252,7 @@ see [docs/DISCORD.md](docs/DISCORD.md). short version: the patches fix the proxy
 ## known limitations
 
 - **webrtc** (discord voice and video, google meet, and so on) isn't proxied. scramjet 2.x doesn't tunnel it, so those connections either fail or go direct from the user's ip.
-- **youtube**: the rewriter's parser can panic on some of youtube's eval'd code ([scramjet #206](https://github.com/MercuryWorkshop/scramjet/issues/206)). `allowInvalidJs` keeps that code running unrewritten, which usually works, but it's inside the compiled wasm so nocturne can't truly fix it. compat mode or switching transport helps when it doesn't.
+- **youtube**: the rewriter's parser can panic on some of youtube's eval'd code ([scramjet #206](https://github.com/MercuryWorkshop/scramjet/issues/206)). `allowInvalidJs` keeps that code running unrewritten, which usually works, but it's inside the compiled wasm so umbrella can't truly fix it. compat mode or switching transport helps when it doesn't.
 - **spotify**: not tested. the web player needs widevine drm, which the iframe allows, but whether spotify's drm and license checks accept a proxied origin is unverified.
 - **microsoft logins** are a known open scramjet issue ([#207](https://github.com/MercuryWorkshop/scramjet/issues/207)).
 - **captchas** (hcaptcha, recaptcha, turnstile) often work but score proxied traffic from datacenter ips harshly.
@@ -247,4 +260,4 @@ see [docs/DISCORD.md](docs/DISCORD.md). short version: the patches fix the proxy
 
 ## license
 
-scramjet, the controller, scramjet-utils and both transports are AGPL-3.0, so nocturne engine is AGPL-3.0 too. if you run a modified version for other people, you have to offer them the source. a link to your repo in the about panel (`public/index.html`) covers it.
+scramjet, the controller, scramjet-utils and both transports are AGPL-3.0, so umbrella is AGPL-3.0 too. if you run a modified version for other people, you have to offer them the source. a link to your repo in the about panel (`public/index.html`) covers it.

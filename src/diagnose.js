@@ -1,4 +1,4 @@
-// nocturne engine: /api/diagnose, explains why a site failed to load.
+// umbrella: /api/diagnose, explains why a site failed to load.
 //
 // epoxy and libcurl only see "the wisp stream closed", which looks the same
 // whether the domain does not exist, the port is closed or the server blocked

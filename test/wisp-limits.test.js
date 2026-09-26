@@ -75,7 +75,7 @@ test("reusing a stream id closes the old socket instead of leaking it", async ()
 test("unresolvable hosts close with unreachable, not a crash", async () => {
 	const c = openWisp(wispUrl);
 	await c.ready;
-	c.connect(1, "nocturne-nope.invalid", 443);
+	c.connect(1, "umbrella-nope.invalid", 443);
 	assert.equal((await c.until(1, (s) => s.closed !== null, 8000)).closed, CLOSE.UnreachableHost);
 	c.close();
 });

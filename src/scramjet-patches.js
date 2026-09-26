@@ -1,4 +1,4 @@
-// nocturne engine: build time fixes for the scramjet 2.0.67-alpha.2 bundles.
+// umbrella: build time fixes for the scramjet 2.0.67-alpha.2 bundles.
 //
 // scramjet ships as minified iifes. dist/scramjet.js runs in the shell page
 // (where the controller rewrites fetched scripts), inside every proxied frame,
@@ -40,60 +40,60 @@ const GLUE_KEYWORDS = [
 // prepended to the bundle. runs in every realm that loads scramjet.
 // kept as plain es2020 so it parses everywhere scramjet itself does.
 const PRELUDE = `
-var __nocturneGlueKeywords = ${JSON.stringify(GLUE_KEYWORDS)}.map(function (k) {
+var __umbrellaGlueKeywords = ${JSON.stringify(GLUE_KEYWORDS)}.map(function (k) {
 	return Array.from(k, function (c) { return c.charCodeAt(0); });
 });
-var __nocturneMarker = Array.from("$scramjet$", function (c) { return c.charCodeAt(0); });
-function __nocturneIsIdent(b) {
+var __umbrellaMarker = Array.from("$scramjet$", function (c) { return c.charCodeAt(0); });
+function __umbrellaIsIdent(b) {
 	return (b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || b === 36 || b === 95 || b > 127;
 }
 // fixes "typeof$scramjet$wrap(x)" style output in place without changing the
 // byte length, so scramjet's own source maps (used for Function.prototype.toString
 // and error stacks) stay valid. "kw$scramjet$name(" becomes "kw $scramjet$nam(",
 // and the shortened name is aliased back to the real helper below.
-function __nocturneFixGlue(bytes) {
+function __umbrellaFixGlue(bytes) {
 	if (!(bytes instanceof Uint8Array)) return bytes;
-	var m = __nocturneMarker, fixed = 0;
+	var m = __umbrellaMarker, fixed = 0;
 	for (var i = bytes.indexOf(36); i !== -1; i = bytes.indexOf(36, i + 1)) {
 		var j = 0;
 		while (j < m.length && bytes[i + j] === m[j]) j++;
 		if (j !== m.length) continue;
 		var end = i + m.length;
-		while (end < bytes.length && __nocturneIsIdent(bytes[end])) end++;
+		while (end < bytes.length && __umbrellaIsIdent(bytes[end])) end++;
 		if (bytes[end] !== 40 || end - i < m.length + 2) continue;
-		for (var k = 0; k < __nocturneGlueKeywords.length; k++) {
-			var kw = __nocturneGlueKeywords[k], start = i - kw.length;
+		for (var k = 0; k < __umbrellaGlueKeywords.length; k++) {
+			var kw = __umbrellaGlueKeywords[k], start = i - kw.length;
 			if (start < 0) continue;
 			var ok = true;
 			for (var q = 0; q < kw.length; q++) if (bytes[start + q] !== kw[q]) { ok = false; break; }
-			if (!ok || (start > 0 && (__nocturneIsIdent(bytes[start - 1]) || bytes[start - 1] === 46))) continue;
+			if (!ok || (start > 0 && (__umbrellaIsIdent(bytes[start - 1]) || bytes[start - 1] === 46))) continue;
 			bytes.copyWithin(i + 1, i, end - 1);
 			bytes[i] = 32;
 			fixed++;
 			break;
 		}
 	}
-	if (fixed && self.__nocturneDiag) self.__nocturneDiag.glueFixes += fixed;
+	if (fixed && self.__umbrellaDiag) self.__umbrellaDiag.glueFixes += fixed;
 	return bytes;
 }
-function __nocturneReportRewriteError(url, err) {
-	var d = self.__nocturneDiag;
+function __umbrellaReportRewriteError(url, err) {
+	var d = self.__umbrellaDiag;
 	if (!d) return;
 	d.rewriteErrors++;
 	var msg = String(err && err.message || err).split("\\n")[0].slice(0, 300);
 	d.lastErrors.push({ url: String(url || "(inline)").slice(0, 500), message: msg, at: Date.now() });
 	if (d.lastErrors.length > 20) d.lastErrors.shift();
-	try { if (typeof self.__nocturneRewriteErrorSink === "function") self.__nocturneRewriteErrorSink(url, msg); } catch (e) {}
+	try { if (typeof self.__umbrellaRewriteErrorSink === "function") self.__umbrellaRewriteErrorSink(url, msg); } catch (e) {}
 }
-if (!self.__nocturneDiag) {
-	Object.defineProperty(self, "__nocturneDiag", {
+if (!self.__umbrellaDiag) {
+	Object.defineProperty(self, "__umbrellaDiag", {
 		value: { rewriteErrors: 0, glueFixes: 0, lastErrors: [] },
 		enumerable: false, configurable: true, writable: true,
 	});
 }
 `;
 
-// appended to the bundle: alias the shortened helper names from __nocturneFixGlue.
+// appended to the bundle: alias the shortened helper names from __umbrellaFixGlue.
 const EPILOGUE = `
 ;(function () {
 	try {
@@ -139,14 +139,14 @@ export const PATCHES = [
 		id: "keyword-glue",
 		why: "scramjet #185: `typeof(x).postMessage` and `return(x).postMessage` get rewritten to `typeof$scramjet$wrappostmessage(...)`, a ReferenceError that kills the whole script.",
 		find: "let{js:u,map:g,scramtag:d,errors:p}=n;",
-		replace: "let{js:u,map:g,scramtag:d,errors:p}=n;u=__nocturneFixGlue(u);",
+		replace: "let{js:u,map:g,scramtag:d,errors:p}=n;u=__umbrellaFixGlue(u);",
 	},
 	{
 		id: "rewrite-error-report",
-		why: "surface rewriter failures to the nocturne ui instead of only a console.warn that dumps the entire script source.",
+		why: "surface rewriter failures to the umbrella ui instead of only a console.warn that dumps the entire script source.",
 		find: 'catch(a){if(o.warn("failed rewriting js for",t||"(unknown)",a.message,"string"!=typeof e?(0,s.hS)(e):e)',
 		replace:
-			'catch(a){__nocturneReportRewriteError(t,a);if(o.warn("failed rewriting js for",t||"(unknown)",a.message,("string"!=typeof e?(0,s.hS)(e):e).slice(0,400))',
+			'catch(a){__umbrellaReportRewriteError(t,a);if(o.warn("failed rewriting js for",t||"(unknown)",a.message,("string"!=typeof e?(0,s.hS)(e):e).slice(0,400))',
 	},
 	{
 		id: "module-worker-imports",
@@ -185,10 +185,11 @@ export const PATCHES = [
 	},
 ];
 
-// NOCTURNE_DISABLE_PATCHES=all (or a comma list of ids) serves stock bundles,
-// handy for checking whether a broken site is a nocturne patch or upstream.
+// UMBRELLA_DISABLE_PATCHES=all (or a comma list of ids) serves stock bundles,
+// handy for checking whether a broken site is an umbrella patch or upstream.
+// the old NOCTURNE_DISABLE_PATCHES name still works.
 const DISABLED = new Set(
-	(process.env.NOCTURNE_DISABLE_PATCHES || "")
+	(process.env.UMBRELLA_DISABLE_PATCHES || process.env.NOCTURNE_DISABLE_PATCHES || "")
 		.split(",")
 		.map((s) => s.trim())
 		.filter(Boolean)
@@ -199,7 +200,7 @@ export function applyPatches(source, patches, applied, skipped) {
 	let code = source;
 	for (const patch of patches) {
 		if (DISABLED.has("all") || DISABLED.has(patch.id)) {
-			skipped.push({ id: patch.id, reason: "disabled by NOCTURNE_DISABLE_PATCHES" });
+			skipped.push({ id: patch.id, reason: "disabled by UMBRELLA_DISABLE_PATCHES" });
 			continue;
 		}
 		const edits = patch.edits ?? [{ find: patch.find, replace: patch.replace }];
@@ -249,7 +250,7 @@ export function buildPatchedControllerInject(source) {
 	const applied = [];
 	const skipped = [];
 	let code = applyPatches(source, CONTROLLER_INJECT_PATCHES, applied, skipped);
-	code = `/* patched by nocturne engine: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
+	code = `/* patched by umbrella: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
 	return { code, applied, skipped };
 }
 
@@ -290,7 +291,7 @@ export function buildPatchedUtils(source) {
 	const applied = [];
 	const skipped = [];
 	let code = applyPatches(source, UTILS_PATCHES, applied, skipped);
-	code = `/* patched by nocturne engine: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
+	code = `/* patched by umbrella: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
 	return { code, applied, skipped };
 }
 
@@ -325,7 +326,7 @@ export function buildPatchedScramjet(source) {
 
 	code = stripSourceMap(code);
 	code =
-		`/* patched by nocturne engine: ${applied.join(", ") || "none"} */\n` +
+		`/* patched by umbrella: ${applied.join(", ") || "none"} */\n` +
 		(needsPrelude ? PRELUDE : "") +
 		code +
 		(applied.includes("keyword-glue") ? EPILOGUE : "") +

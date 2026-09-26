@@ -1,13 +1,3 @@
-// nocturne engine: frame plugins layered on top of the scramjet controller.
-//
-// each one is a ManagedPlugin, the same plugin type scramjet-utils uses, so it
-// installs onto a controller Frame and taps the frame's hooks:
-//   frame.hooks.fetch.intercept   answer a request before it hits the network
-//   frame.hooks.fetch.request     edit the outgoing request
-//   frame.hooks.fetch.response    edit the rewritten response
-//   frame.hooks.error.request     replace a failed response
-//   frame.hooks.init.post         runs inside every proxied window after scramjet hooks it
-
 import { isBlocked } from "./blocklist.js";
 import {
 	renderErrorPage,
@@ -22,19 +12,14 @@ const { ScramjetHeaders } = globalThis.$scramjet;
 
 const isNavigation = (dest) => dest === "document" || dest === "iframe" || dest === "frame";
 
-// ---------------------------------------------------------------------------
-// error pages
-// ---------------------------------------------------------------------------
-
 export class ErrorPagePlugin extends ManagedPlugin {
 	constructor(onError) {
-		super("nocturne-error-pages", []);
+		super("umbrella-error-pages", []);
 		this.onError = onError;
 	}
 
 	install(frame) {
 		super.install(frame);
-		// async: the controller awaits every tap before answering the request
 		this.tap(frame.hooks.error.request, async (ctx, props) => {
 			const req = ctx.rawrequest;
 			let target = req.rawUrl;
@@ -43,11 +28,9 @@ export class ErrorPagePlugin extends ManagedPlugin {
 					new URL(req.rawUrl).pathname.slice(frame.prefix.length)
 				);
 			} catch {
-				// keep the raw url
 			}
 			let kind = classifyError(ctx.error);
 			const navigation = isNavigation(req.destination);
-			// only spend a round trip on navigations, subresource failures just log
 			if (navigation && needsDiagnosis(ctx.error, kind)) kind = (await diagnoseKind(target)) ?? kind;
 			this.onError?.({ url: target, kind, error: ctx.error, destination: req.destination });
 			if (!navigation) return;
@@ -55,10 +38,6 @@ export class ErrorPagePlugin extends ManagedPlugin {
 		});
 	}
 }
-
-// ---------------------------------------------------------------------------
-// ad + tracker blocking
-// ---------------------------------------------------------------------------
 
 const EMPTY_TYPES = {
 	script: "text/javascript",
@@ -69,7 +48,7 @@ const EMPTY_TYPES = {
 
 export class ContentBlockerPlugin extends ManagedPlugin {
 	constructor(isEnabled) {
-		super("nocturne-content-blocker", []);
+		super("umbrella-content-blocker", []);
 		this.isEnabled = isEnabled;
 		this.blocked = 0;
 	}
@@ -87,7 +66,6 @@ export class ContentBlockerPlugin extends ManagedPlugin {
 				props.response = { ...page, headers: ScramjetHeaders.fromRawHeaders(page.headers) };
 				return;
 			}
-			// an empty 200 keeps most ad loaders from retrying in a loop
 			props.response = {
 				body: "",
 				status: 200,
@@ -101,16 +79,9 @@ export class ContentBlockerPlugin extends ManagedPlugin {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// diagnostics + recovery
-// ---------------------------------------------------------------------------
-
-// watches every proxied window for uncaught errors and rewriter failures, then
-// flags pages that finished loading but rendered nothing so the shell can offer
-// recovery options (reload, compat mode, other transport).
 export class RecoveryPlugin extends ManagedPlugin {
 	constructor(report) {
-		super("nocturne-recovery", []);
+		super("umbrella-recovery", []);
 		this.report = report;
 	}
 
@@ -132,10 +103,8 @@ export class RecoveryPlugin extends ManagedPlugin {
 				if (state.samples.length > 8) state.samples.shift();
 			};
 
-			// rewriter failures inside this realm (eval, inline handlers, dynamic
-			// scripts) come in through the sink the patched scramjet bundle calls
 			try {
-				Object.defineProperty(win, "__nocturneRewriteErrorSink", {
+				Object.defineProperty(win, "__umbrellaRewriteErrorSink", {
 					value: (url, message) => {
 						state.rewriteErrors++;
 						note("rewrite", `${url || "(inline)"}: ${message}`);
@@ -146,11 +115,9 @@ export class RecoveryPlugin extends ManagedPlugin {
 					writable: true,
 				});
 			} catch {
-				// frozen global, nothing to do
 			}
 
 			listen(win, "error", (e) => {
-				// resource load errors bubble here too, only count script errors
 				if (e && e.error === undefined && !e.message) return;
 				state.errors++;
 				note("error", e.message || e.error);
@@ -182,7 +149,6 @@ export class RecoveryPlugin extends ManagedPlugin {
 							samples: state.samples.slice(),
 						});
 					} catch {
-						// page navigated away mid check
 					}
 				}, 3500);
 			});
@@ -190,14 +156,9 @@ export class RecoveryPlugin extends ManagedPlugin {
 	}
 }
 
-// ---------------------------------------------------------------------------
-// shell bridge
-// ---------------------------------------------------------------------------
-
-// title + loading signals for the top level page, used by the ui
 export class ShellBridgePlugin extends ManagedPlugin {
 	constructor(events) {
-		super("nocturne-shell-bridge", []);
+		super("umbrella-shell-bridge", []);
 		this.events = events;
 	}
 
@@ -228,7 +189,6 @@ export class ShellBridgePlugin extends ManagedPlugin {
 					);
 				if (title || win.document.documentElement) observe();
 			} catch {
-				// not fatal, title just will not live update
 			}
 		});
 	}
