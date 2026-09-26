@@ -167,6 +167,22 @@ export const PATCHES = [
 		find: '"link"===t.args[0].toLowerCase()&&t.return(s(r,e.context))',
 		replace: '"link"===`${t.args[0]}`.toLowerCase()&&t.return(s(r,e.context))',
 	},
+	{
+		id: "media-src-readback",
+		why: "a player that does `audio.src = URL.createObjectURL(mediaSource)` got a blob url on the site's origin from the hooked createObjectURL, but reading audio.src back returned the real blob url on the proxy's origin, so `audio.src === url` was false. audio.currentSrc was not hooked at all and returned the /~/sj/ proxy url. players compare these to tell whether the element still belongs to them. both getters now return what the site set.",
+		edits: [
+			{
+				find: '(0,n.pS)(i.prototype,t,{get(){return["src","data","href","action","formaction"].includes(t)?(0,l.v2)(r.get.call(this),e.context):r.get.call(this)}',
+				replace:
+					'(0,n.pS)(i.prototype,t,{get(){let v=r.get.call(this);return["src","data","href","action","formaction"].includes(t)?"string"==typeof v&&v.startsWith("blob:"+e.context.prefix.origin+"/")?(0,l.IP)(v,e.context,e.meta):(0,l.v2)(v,e.context):v}',
+			},
+			{
+				find: 'e.Trap("Node.prototype.baseURI",{get(t){',
+				replace:
+					'e.Trap("HTMLMediaElement.prototype.currentSrc",{get(t){let v=t.get();return v?v.startsWith("blob:"+e.context.prefix.origin+"/")?(0,l.IP)(v,e.context,e.meta):(0,l.v2)(v,e.context):v}}),e.Trap("Node.prototype.baseURI",{get(t){',
+			},
+		],
+	},
 ];
 
 // NOCTURNE_DISABLE_PATCHES=all (or a comma list of ids) serves stock bundles,
@@ -247,6 +263,22 @@ export const UTILS_PATCHES = [
 		why: "HttpCachePlugin rebuilt every cacheable response through `new Response()`, and the Response constructor silently drops Set-Cookie. so any cacheable GET that set a cookie (login pages, session refreshes) lost it and the proxied site never saw the cookie again. keep the original raw headers on the response the page gets. the cached copy still has no cookies, which is what you want.",
 		find: "let{replacement:m,bodyBuffer:g}=await p(t.response);t.response=m;",
 		replace: "let{replacement:m,bodyBuffer:g}=await p(t.response);m.rawHeaders=t.response.rawHeaders;t.response=m;",
+	},
+	{
+		id: "http-cache-skips-media",
+		why: "HttpCachePlugin matched cached responses by url only, so once a full copy of an audio file was cached, a `Range: bytes=100-199` request got the whole file back as a 200. music players fetch audio in byte ranges and choke on that. it also read every cacheable 200 to the end before handing it to the page, so a live stream (internet radio, a response that never finishes) never started playing. range requests, audio/video requests and media responses now skip the cache.",
+		edits: [
+			{
+				find: "let n,o=e.request;if(!u(o.method))return;",
+				replace:
+					'let n,o=e.request;if(!u(o.method)||o.initialHeaders.has("range")||/^(audio|video|track)$/.test(e.parsed.destination))return;',
+			},
+			{
+				find: "let f=d(t.response.rawHeaders);if(!function(e,t,r)",
+				replace:
+					'let f=d(t.response.rawHeaders);if(o.initialHeaders.has("range")||/^(audio|video|track)$/.test(e.parsed.destination)||/^(audio\\/|video\\/|application\\/vnd\\.yt-ump|text\\/event-stream)/i.test(f.get("content-type")||""))return;if(!function(e,t,r)',
+			},
+		],
 	},
 ];
 
