@@ -30,7 +30,10 @@ export const SEARCH_ENGINES = {
 };
 
 const DEFAULT_SETTINGS = {
-	transport: "epoxy", // "epoxy" | "libcurl"
+	// "libcurl" | "epoxy". libcurl is the default because epoxy 3.0.1 hangs on
+	// the first request after a site closes an idle keep alive connection (most
+	// servers do that after 5 to 75 seconds), see README "transports"
+	transport: "libcurl",
 	wispUrl: "", // empty means same origin /wisp/
 	searchEngine: "duckduckgo",
 	blockAds: true,

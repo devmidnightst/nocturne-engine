@@ -7,7 +7,7 @@
 import http from "node:http";
 import path from "node:path";
 import express from "express";
-import { server as wisp, logging as wispLogging } from "@mercuryworkshop/wisp-js/server";
+import { logging as wispLogging } from "@mercuryworkshop/wisp-js/server";
 
 import { config, ROOT } from "./config.js";
 import {
@@ -20,6 +20,7 @@ import {
 import { createDomainAllowlist } from "./domains.js";
 import { createDiagnoseHandler } from "./diagnose.js";
 import { packageDir as pkgDir } from "./packages.js";
+import { createWispHandler } from "./wisp.js";
 
 const DIST = {
 	scramjet: scramjetDistDir(),
@@ -49,18 +50,7 @@ const patches = Object.fromEntries(
 // wisp
 // ---------------------------------------------------------------------------
 
-Object.assign(wisp.options, {
-	allow_private_ips: config.wisp.allowPrivateIps,
-	allow_loopback_ips: config.wisp.allowLoopbackIps,
-	allow_udp_streams: config.wisp.allowUdp,
-	stream_limit_per_host: config.wisp.streamLimitPerHost,
-	stream_limit_total: config.wisp.streamLimitTotal,
-	port_blacklist: config.wisp.portBlacklist.length ? config.wisp.portBlacklist : null,
-	dns_servers: config.wisp.dnsServers.length ? config.wisp.dnsServers : null,
-	// caddy on the same box sets x-forwarded-for, so logs show the real client ip
-	parse_real_ip: true,
-	parse_real_ip_from: ["127.0.0.1", "::1", "::ffff:127.0.0.1"],
-});
+const wispUpgrade = createWispHandler(config.wisp);
 wispLogging.set_level(wispLogging[config.wisp.logLevel] ?? wispLogging.WARN);
 
 // ---------------------------------------------------------------------------
@@ -182,7 +172,8 @@ export function createServer() {
 
 	server.on("upgrade", (req, socket, head) => {
 		const url = new URL(req.url, "http://localhost");
-		if (!url.pathname.startsWith(config.wisp.path)) {
+		// exact match: wisp-js treats any other path under it as a raw tcp tunnel ("wsproxy")
+		if (url.pathname !== config.wisp.path) {
 			socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
 			return;
 		}
@@ -195,7 +186,7 @@ export function createServer() {
 			}
 		}
 		socket.on("error", () => {});
-		wisp.routeRequest(req, socket, head);
+		wispUpgrade(req, socket, head);
 	});
 
 	return server;
@@ -227,12 +218,22 @@ function main() {
 		server.closeIdleConnections?.();
 		setTimeout(() => process.exit(0), 8000).unref();
 	};
+	// node exits on an unhandled rejection by default. for a proxy that means one
+	// odd upstream packet drops every user, so log it and keep serving instead.
+	process.on("unhandledRejection", (reason) => {
+		console.error("[nocturne] unhandled rejection", reason);
+	});
+
 	process.on("SIGINT", () => shutdown("SIGINT"));
 	process.on("SIGTERM", () => shutdown("SIGTERM"));
 	process.on("message", (msg) => msg === "shutdown" && shutdown("shutdown message"));
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(ROOT, "src/server.js")) {
+// run when started directly (`node src/server.js`) or by pm2. in cluster mode
+// pm2 loads this file from its own ProcessContainer, so argv[1] is pm2's script,
+// not this one; pm2 always sets pm_id for the processes it starts.
+const startedDirectly = process.argv[1] && path.resolve(process.argv[1]) === path.resolve(ROOT, "src/server.js");
+if (startedDirectly || process.env.pm_id !== undefined) {
 	main();
 }
 

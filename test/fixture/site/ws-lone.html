@@ -1,0 +1,36 @@
+<!doctype html>
+<html>
+	<head>
+		<meta charset="utf-8" />
+		<title>ws lone send</title>
+	</head>
+	<body>
+		<pre id="result">waiting</pre>
+		<script>
+			// one websocket, nothing else on the page making requests: wait for the
+			// hello, go quiet, then send a single message and expect its echo.
+			// epoxy 3.0.1 held that lone frame until something else was written.
+			var ws = new WebSocket("ws://" + location.host + "/ws");
+			var sentAt = 0;
+			function done(r) {
+				document.getElementById("result").textContent = r;
+				document.title = "lone " + r;
+			}
+			ws.onmessage = function (e) {
+				var d = JSON.parse(e.data);
+				if (d.hello) {
+					setTimeout(function () {
+						sentAt = Date.now();
+						ws.send(JSON.stringify({ lone: 7 }));
+					}, 800);
+				} else if (d.lone === 7) {
+					done("ok " + (Date.now() - sentAt) + "ms");
+					ws.close();
+				}
+			};
+			setTimeout(function () {
+				if (document.title.indexOf("lone ") !== 0) done("stuck");
+			}, 6000);
+		</script>
+	</body>
+</html>

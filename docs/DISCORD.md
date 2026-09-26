@@ -20,6 +20,7 @@ that loads each url through the proxy, waits 15s, and saves a screenshot (`e2e-d
 | minified `typeof(x).y` style code became a ReferenceError after rewriting | `keyword-glue` |
 | module workers with imports died on load | `module-worker-imports` |
 | `ws.close(code, reason)` lost the reason | `websocket-close-reason` |
+| epoxy 3.0.1 kept every websocket frame the page sent until the next one went out. discord's IDENTIFY would sit in the browser until the first heartbeat, and each heartbeat only left with the one after it, so the gateway would treat the session as dead and the client would reconnect forever. found by the soak test (echo round trips were exactly one ping interval on epoxy, 4ms on libcurl). | with epoxy selected, websockets go through libcurl (`engine.js`). the e2e suite checks a lone message's round trip on both transports. |
 
 with "block ads & trackers" on, discord's telemetry (`/api/v*/science` and `/api/v*/metrics`) is answered locally with an empty 200. that's less traffic through wisp and one less thing to go wrong.
 

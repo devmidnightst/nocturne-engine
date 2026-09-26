@@ -23,7 +23,9 @@ nocturne-engine/
     Caddyfile               on_demand_tls + ask endpoint + reverse proxy
     domains.txt.example     optional custom domain list
   src/                      node server
-    server.js               express app, wisp upgrade handler, asset routes, graceful shutdown
+    server.js               express app, websocket upgrade routing, asset routes, graceful shutdown
+    wisp.js                 the wisp endpoint: wisp-js with its crash, leak and ssrf holes closed
+    ip-policy.js            the one ssrf rule set, shared by wisp and /api/diagnose
     scramjet-patches.js     the bundle patches (exact string edits, version locked)
     config.js               env + .env loading
     domains.js              tls allowlist (exact names and *.wildcards, file hot reload)
@@ -42,6 +44,7 @@ nocturne-engine/
     js/plugins/             nocturne frame plugins + blocklist
   test/                     unit tests + a fixture site that exercises the rewriter
   scripts/e2e.mjs           real chromium end to end suite
+  scripts/soak.mjs          long running stability test (npm run test:soak)
   docs/
     PATCHES.md              every patch, why it exists, how it was proven
     DISCORD.md              discord notes and known limits
@@ -112,6 +115,8 @@ all in `.env.example` with comments. the important ones:
 | `WISP_ALLOW_LOOPBACK_IPS` | `false` | same, for 127.0.0.0/8 and ::1 |
 | `WISP_PORT_BLACKLIST` | `25,465,587` | stops people sending spam from your ip |
 | `WISP_ALLOWED_ORIGINS` | empty | set to your own origins so other sites can't hotlink your wisp bandwidth |
+| `WISP_STREAM_LIMIT_PER_HOST` | `-1` | caps streams per destination host on one wisp connection. used to crash the server, safe now |
+| `WISP_MAX_FRAME_BYTES` | `4194304` | biggest websocket frame a client may send to `/wisp/` |
 | `TLS_ALLOWED_DOMAINS` | empty | who caddy may get certs for |
 | `NOCTURNE_DISABLE_PATCHES` | empty | `all` or a list of patch ids, for debugging |
 
@@ -137,7 +142,19 @@ the node server:
 - serves the rest of `@mercuryworkshop/scramjet/dist` and the controller dist as static files, `scramjet.wasm` as `application/wasm`, and the transports at `/transports/epoxy.mjs` and `/transports/libcurl.mjs`.
 - serves `/sw.js` with `Service-Worker-Allowed: /` and no caching, so updates reach users on the next load.
 - sets `X-Content-Type-Options` and `Referrer-Policy` everywhere, and cors plus `Cross-Origin-Resource-Policy` on the engine assets. it deliberately sets no `X-Frame-Options` or coep on the shell. the proxied pages come from the service worker, and scramjet handles site csp itself.
-- handles websocket upgrades itself: `/wisp/` goes to wisp-js, anything else gets a 404, and a disallowed origin gets a 403 when `WISP_ALLOWED_ORIGINS` is set.
+- handles websocket upgrades itself: exactly `/wisp/` goes to the wisp endpoint in `wisp.js`, anything else gets a 404 (wisp-js would otherwise open a raw tcp tunnel for paths like `/wisp/host:22`), and a disallowed origin gets a 403 when `WISP_ALLOWED_ORIGINS` is set.
+- `wisp.js` runs wisp-js 0.5.0's connection class with fixes on top: every stream resolves once, gets checked by `ip-policy.js` and connects to that exact address (so `::ffff:127.0.0.1` and friends can't sneak past, and dns rebinding can't swap the target), bad websocket frames can't crash the process, reused stream ids can't leak sockets, the per host stream limit works instead of crashing, and frames are capped at `WISP_MAX_FRAME_BYTES`.
+
+### transports
+
+libcurl is the default. epoxy 3.0.1 (the newest release) has two bugs the soak test and e2e suite caught:
+
+- **stale keep alive hang**: when a site closes an idle keep alive connection (node does it after 5s, nginx after 75s, most servers somewhere in between), epoxy's next request to that site reuses the dead connection and hangs forever. so a page you read for a minute stops loading anything when you click. `npm run test:e2e` shows it as a "known" line.
+- **held websocket frames**: every frame a page sends sits in the browser until the next frame is sent. a chat app that sends one message and waits for the reply hangs, and discord's gateway never gets a timely heartbeat.
+
+epoxy is still in settings. when it's picked, its websockets go through libcurl (loaded when the first socket opens, or when the browser is idle), which fixes the second bug but not the first.
+
+scramjet 2.x also never cancels a request when a page is left (the controller passes the transport no abort signal), so long polls and requests to dead hosts piled up until libcurl's 6 connections per host were all stuck and the site froze. `engine.js` tracks every request until its body finishes and aborts them all when the top level page unloads, and gives libcurl 16 connections per host.
 
 ### rewriter config
 
@@ -166,7 +183,7 @@ nocturne's own, in `public/js/plugins/nocturne-plugins.js`:
 - omnibox that takes a url, a bare host (`discord.com`) or a search. the search engine is picked in settings.
 - back, forward, reload, loading bar, open current page in a new tab, bookmark star.
 - bookmarks and history panels. everything is stored in localStorage and never leaves the browser.
-- settings: transport (epoxy or libcurl, switched live), search engine, ad blocking, custom wisp url, compat sites, developer toggles, clear data.
+- settings: transport (libcurl or epoxy, switched live), search engine, ad blocking, custom wisp url, compat sites, developer toggles, clear data.
 - `ctrl+l` focuses the omnibox, `esc` closes panels.
 - mobile: the panel becomes a bottom sheet and less important buttons hide under 640px.
 - links like `/?go=https://example.com` open straight into the proxy.
@@ -190,6 +207,15 @@ the e2e suite starts the server and a local fixture site, then loads the fixture
 it also checks the error page and the ad blocker. `NOCTURNE_E2E_URLS=https://a.com,https://b.com` adds real site smoke tests with screenshots. `CHROME_PATH` points it at a chromium binary if playwright can't find one.
 
 `NOCTURNE_DISABLE_PATCHES=all npm run test:e2e` shows what stock scramjet fails.
+
+### soak test
+
+```sh
+npm run test:soak                   # 30 minutes
+SOAK_MINUTES=120 npm run test:soak  # longer
+```
+
+runs the server as its own process and keeps a real chromium on it the whole time: two shells navigating in a loop (fixture, a heavy page with 31 parallel requests and 5 MB of bodies checked byte for byte, redirects, error pages, and any `SOAK_URLS`), flipping transport and reloading every so often, plus one shell per transport holding websockets open for the entire run. every minute it records server rss, heap after gc, open fds, wisp connections, each shell's js heap and dom size and navigation latency, and at the end writes `soak-results/<time>/report.md` comparing the start of the run with the end.
 
 ## version notes
 

@@ -15,6 +15,7 @@
     "check": "node src/check.js",
     "test": "node --test \"test/*.test.js\"",
     "test:e2e": "node scripts/e2e.mjs",
+    "test:soak": "node scripts/soak.mjs",
     "pm2": "pm2 start ecosystem.config.cjs",
     "pm2:reload": "pm2 reload ecosystem.config.cjs"
   },

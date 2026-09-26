@@ -62,21 +62,120 @@ function buildScramjetConfig() {
 	};
 }
 
+async function createLibcurl(url) {
+	const { LibcurlClient } = await import("/transports/libcurl.mjs");
+	// [total, idle cache, per host]. libcurl's default is 50 / 40 / 6. single page
+	// apps hold a few long lived requests to their own host for as long as they
+	// run, so leave more room per host than a browser's 6.
+	const transport = new LibcurlClient({ wisp: url, connections: [80, 40, 16] });
+	await transport.init();
+	return transport;
+}
+
+// epoxy 3.0.1 holds every websocket frame the page sends until the next one is
+// sent (the last frame never leaves the browser). a chat app that sends one
+// message and waits for the answer just hangs: discord's IDENTIFY sits there
+// until the next heartbeat, and each heartbeat only goes out with the one after
+// it, so the gateway never sees a timely heartbeat. so when epoxy is picked, its
+// websockets are handed to libcurl, which sends immediately. (epoxy's http also
+// hangs after a site closes an idle keep alive connection, which is why libcurl
+// is the default, see store.js.)
+// libcurl loads the first time a page opens a socket, or when the browser is idle.
+function epoxyWithLibcurlSockets(epoxy, url) {
+	let libcurl = null;
+	const getLibcurl = () => (libcurl ??= createLibcurl(url).catch((err) => ((libcurl = null), Promise.reject(err))));
+	(self.requestIdleCallback ?? setTimeout)(() => getLibcurl().catch(() => {}), { timeout: 5000 });
+
+	return {
+		get ready() {
+			return epoxy.ready;
+		},
+		init: () => epoxy.init(),
+		meta: () => epoxy.meta?.(),
+		request: (...args) => epoxy.request(...args),
+		connect(wsUrl, protocols, headers, onopen, onmessage, onclose, onerror) {
+			let inner = null;
+			let closed = null;
+			const pending = [];
+			getLibcurl().then(
+				(t) => {
+					if (closed) return onclose(closed[0] ?? 1000, closed[1] ?? "");
+					inner = t.connect(wsUrl, protocols, headers, onopen, onmessage, onclose, onerror);
+					for (const d of pending.splice(0)) inner[0](d);
+				},
+				(err) => {
+					onerror(String(err?.message ?? err));
+					onclose(1006, "");
+				}
+			);
+			return [
+				(data) => (inner ? inner[0](data) : pending.push(data)),
+				(code, reason) => (inner ? inner[1](code, reason) : (closed = [code, reason])),
+			];
+		},
+	};
+}
+
+// scramjet 2.x never tells the transport when a request is abandoned (the
+// controller passes no abort signal), so a page's long polls, event streams and
+// requests to hosts that never answer keep running after you leave it. libcurl
+// allows 6 connections per host, so six of those wedged every later request to
+// that site until they timed out (the soak test caught tabs frozen for minutes).
+// this tracks every request until its body is done, and the shell aborts the
+// lot when the top level page unloads, the way a browser would.
+function withAbortableRequests(transport) {
+	const inflight = new Set();
+	const request = transport.request.bind(transport);
+	transport.request = async (remote, method, body, headers, signal) => {
+		const ac = new AbortController();
+		const onAbort = () => ac.abort();
+		signal?.addEventListener("abort", onAbort, { once: true });
+		inflight.add(ac);
+		const done = () => {
+			inflight.delete(ac);
+			signal?.removeEventListener("abort", onAbort);
+		};
+		let res;
+		try {
+			res = await request(remote, method, body, headers, ac.signal);
+		} catch (err) {
+			done();
+			throw err;
+		}
+		if (res.body instanceof ReadableStream) {
+			let ended = false;
+			const end = () => ended || ((ended = true), done());
+			res.body = res.body.pipeThrough(new TransformStream({ flush: end }));
+			ac.signal.addEventListener("abort", end, { once: true });
+		} else {
+			done();
+		}
+		return res;
+	};
+	transport.abortInFlight = () => {
+		const n = inflight.size;
+		for (const ac of inflight) ac.abort();
+		inflight.clear();
+		return n;
+	};
+	return transport;
+}
+
 async function createTransport(kind = settings.get().transport) {
 	const url = wispUrl();
 	let transport;
 	if (kind === "libcurl") {
-		const { LibcurlClient } = await import("/transports/libcurl.mjs");
-		transport = new LibcurlClient({ wisp: url });
+		transport = await createLibcurl(url);
 	} else {
 		const { default: EpoxyTransport } = await import("/transports/epoxy.mjs");
-		transport = new EpoxyTransport({ wisp: url });
+		const epoxy = new EpoxyTransport({ wisp: url });
+		// init up front: the controller calls transport.connect() directly for
+		// websockets, and that path does not lazily init like fetch does
+		await epoxy.init();
+		transport = epoxyWithLibcurlSockets(epoxy, url);
 	}
-	// init up front: the controller calls transport.connect() directly for
-	// websockets, and that path does not lazily init like fetch does
-	await transport.init();
 	transport.nocturneKind = kind;
-	return transport;
+	return withAbortableRequests(transport);
 }
 
 async function registerServiceWorker(onStatus) {
@@ -142,7 +241,11 @@ export async function createEngine(iframe, events = {}, onStatus) {
 		}),
 		new ShellBridgePlugin({
 			onNavigateStart: () => events.onLoading?.(true),
-			onUnloading: () => events.onLoading?.(true),
+			onUnloading: () => {
+				// the page is going away, so is everything it was still loading
+				transport.abortInFlight?.();
+				events.onLoading?.(true);
+			},
 			onLoaded: () => events.onLoading?.(false),
 			onTitle: (t) => events.onTitle?.(t),
 		}),

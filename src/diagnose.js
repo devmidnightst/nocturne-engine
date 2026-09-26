@@ -9,24 +9,7 @@
 
 import dns from "node:dns/promises";
 import net from "node:net";
-import ipaddr from "ipaddr.js";
-
-// same ranges wisp-js refuses (src/server/filter.mjs), so the answer matches what wisp does
-const LOOPBACK = ["loopback", "unspecified"];
-const PRIVATE = ["broadcast", "linkLocal", "carrierGradeNat", "private", "reserved"];
-
-function ipBlocked(ip, wisp) {
-	let addr;
-	try {
-		addr = ipaddr.parse(ip);
-	} catch {
-		return false;
-	}
-	const range = addr.range();
-	if (!wisp.allowLoopbackIps && LOOPBACK.includes(range)) return true;
-	if (!wisp.allowPrivateIps && PRIVATE.includes(range)) return true;
-	return false;
-}
+import { ipBlocked } from "./ip-policy.js";
 
 function tcpProbe(host, port, timeoutMs) {
 	return new Promise((resolve) => {

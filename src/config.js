@@ -51,6 +51,9 @@ export const config = {
 		// if set, only pages served from these origins may open wisp sockets.
 		// stops other proxy sites from hotlinking your bandwidth.
 		allowedOrigins: list(env.WISP_ALLOWED_ORIGINS),
+		// biggest single websocket frame a client may send. wisp packets are small,
+		// the ws library default of 100 MiB only helps someone trying to eat ram.
+		maxPayload: int(env.WISP_MAX_FRAME_BYTES, 4 * 1024 * 1024),
 		logLevel: (env.WISP_LOG_LEVEL || "WARN").toUpperCase(),
 		dnsServers: list(env.WISP_DNS_SERVERS),
 	},
