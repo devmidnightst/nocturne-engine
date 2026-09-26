@@ -259,8 +259,7 @@ function renderQuick() {
 		...QUICK_LINKS.map((q) =>
 			el(
 				"button",
-				{ class: "quick-item glass", style: `--accent:${q.color}`, onclick: () => navigate(q.url) },
-				el("span", { class: "quick-dot" }),
+				{ class: "quick-item", onclick: () => navigate(q.url) },
 				q.name
 			)
 		)

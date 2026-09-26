@@ -107,26 +107,26 @@ export async function diagnoseKind(targetUrl) {
 }
 
 const STYLE = `
-:root{color-scheme:dark}
+:root{color-scheme:light dark;--bg:#fff;--surface:#f6f6f7;--hover:#ececee;--line:#dcdce0;--text:#1c1c1f;--muted:#6b6b73;--accent:#2563eb}
+@media (prefers-color-scheme:dark){:root{--bg:#1b1b1d;--surface:#242427;--hover:#2e2e32;--line:#3a3a3f;--text:#e8e8ea;--muted:#9d9da6;--accent:#7aa2f7}}
 *{box-sizing:border-box}
 body{margin:0;min-height:100vh;display:grid;place-items:center;padding:24px 16px;
-font:15px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
-background:radial-gradient(1200px 600px at 50% -10%,#2a2150 0%,#0b0a14 55%,#07060d 100%);color:#e8e6f5}
-.card{width:min(560px,100%);padding:28px;border-radius:20px;background:rgba(255,255,255,.05);
-border:1px solid rgba(255,255,255,.1);backdrop-filter:blur(18px);box-shadow:0 20px 60px rgba(0,0,0,.45)}
-.brand{display:flex;gap:10px;align-items:center;font-size:12px;letter-spacing:.14em;text-transform:uppercase;color:#a69ee0}
-.brand i{width:10px;height:10px;border-radius:50%;background:linear-gradient(135deg,#b9a7ff,#6f5cff);box-shadow:0 0 12px #7b68ff}
-h1{font-size:22px;margin:14px 0 6px;font-weight:650}
-p{margin:0 0 14px;color:#b9b5d3}
+font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;background:var(--bg);color:var(--text)}
+.card{width:min(560px,100%)}
+.brand{font-size:13px;color:var(--muted)}
+.brand i{display:none}
+h1{font-size:22px;margin:8px 0 6px;font-weight:600}
+p{margin:0 0 14px;color:var(--muted)}
 code,.url{font:12.5px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;word-break:break-all}
-.url{display:block;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.35);color:#d8d3ff;margin-bottom:16px}
-details{margin-top:14px;color:#8f8aad}
-details code{display:block;white-space:pre-wrap;margin-top:8px;padding:10px 12px;border-radius:10px;background:rgba(0,0,0,.35)}
-.row{display:flex;gap:10px;flex-wrap:wrap}
-button{appearance:none;border:1px solid rgba(255,255,255,.14);background:rgba(255,255,255,.07);color:#eee;
-padding:9px 14px;border-radius:12px;font:inherit;cursor:pointer}
-button.primary{background:linear-gradient(135deg,#8b7bff,#5b48f0);border-color:transparent;color:#fff}
-button:hover{filter:brightness(1.12)}
+.url{display:block;padding:8px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--line);margin-bottom:16px}
+details{margin-top:14px;color:var(--muted)}
+details code{display:block;white-space:pre-wrap;margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--surface);border:1px solid var(--line)}
+.row{display:flex;gap:8px;flex-wrap:wrap}
+button{appearance:none;border:1px solid var(--line);background:var(--surface);color:var(--text);
+padding:7px 14px;border-radius:6px;font:inherit;cursor:pointer}
+button:hover{background:var(--hover)}
+button.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+button.primary:hover{filter:brightness(1.08)}
 `;
 
 // markup is injected with the target url as data, never as script source
