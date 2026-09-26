@@ -1,0 +1,239 @@
+// nocturne engine: http server.
+//
+// serves the shell ui, the scramjet runtime (patched, see scramjet-patches.js),
+// the controller + transports, and the wisp websocket endpoint that the
+// epoxy / libcurl transports tunnel through. one process, pm2 cluster friendly.
+
+import http from "node:http";
+import path from "node:path";
+import express from "express";
+import { server as wisp, logging as wispLogging } from "@mercuryworkshop/wisp-js/server";
+
+import { config, ROOT } from "./config.js";
+import {
+	buildPatchedScramjet,
+	buildPatchedControllerInject,
+	buildPatchedUtils,
+	scramjetDistDir,
+	SCRAMJET_VERSION,
+} from "./scramjet-patches.js";
+import { createDomainAllowlist } from "./domains.js";
+import { createDiagnoseHandler } from "./diagnose.js";
+import { packageDir as pkgDir } from "./packages.js";
+
+const DIST = {
+	scramjet: scramjetDistDir(),
+	controller: path.join(pkgDir("@mercuryworkshop/scramjet-controller"), "dist"),
+	epoxy: path.join(pkgDir("@mercuryworkshop/epoxy-transport"), "dist"),
+	libcurl: path.join(pkgDir("@mercuryworkshop/libcurl-transport"), "dist"),
+};
+const PUBLIC = path.join(ROOT, "public");
+
+// ---------------------------------------------------------------------------
+// scramjet bundles, patched once at boot and served from memory
+// ---------------------------------------------------------------------------
+
+const bundles = {
+	"/scramjet/scramjet.js": buildPatchedScramjet(),
+	"/controller/controller.inject.js": buildPatchedControllerInject(),
+	"/utils/scramjet-utils.js": buildPatchedUtils(),
+};
+for (const [route, b] of Object.entries(bundles)) {
+	b.etag = `"nocturne-${Buffer.from(route).toString("base64url")}-${b.applied.length}-${b.code.length}"`;
+}
+const patches = Object.fromEntries(
+	Object.entries(bundles).map(([route, b]) => [route, { applied: b.applied, skipped: b.skipped }])
+);
+
+// ---------------------------------------------------------------------------
+// wisp
+// ---------------------------------------------------------------------------
+
+Object.assign(wisp.options, {
+	allow_private_ips: config.wisp.allowPrivateIps,
+	allow_loopback_ips: config.wisp.allowLoopbackIps,
+	allow_udp_streams: config.wisp.allowUdp,
+	stream_limit_per_host: config.wisp.streamLimitPerHost,
+	stream_limit_total: config.wisp.streamLimitTotal,
+	port_blacklist: config.wisp.portBlacklist.length ? config.wisp.portBlacklist : null,
+	dns_servers: config.wisp.dnsServers.length ? config.wisp.dnsServers : null,
+	// caddy on the same box sets x-forwarded-for, so logs show the real client ip
+	parse_real_ip: true,
+	parse_real_ip_from: ["127.0.0.1", "::1", "::ffff:127.0.0.1"],
+});
+wispLogging.set_level(wispLogging[config.wisp.logLevel] ?? wispLogging.WARN);
+
+// ---------------------------------------------------------------------------
+// express app
+// ---------------------------------------------------------------------------
+
+const app = express();
+app.disable("x-powered-by");
+app.set("trust proxy", config.trustProxy);
+app.set("etag", "strong");
+
+const domains = createDomainAllowlist(config.domains);
+
+// headers for the shell itself. deliberately no x-frame-options / coep here:
+// the proxied pages are served by the service worker, not by this server, and
+// scramjet strips site csp on its own. these only harden the shell.
+app.use((req, res, next) => {
+	res.setHeader("X-Content-Type-Options", "nosniff");
+	res.setHeader("Referrer-Policy", "same-origin");
+	res.setHeader("X-Nocturne-Engine", SCRAMJET_VERSION);
+	next();
+});
+
+// engine assets: cors open so other nocturne subdomains can reuse them, and a
+// short cache because the files only change when package.json pins change.
+const assetHeaders = (res, file) => {
+	res.setHeader("Access-Control-Allow-Origin", "*");
+	res.setHeader("Cross-Origin-Resource-Policy", "cross-origin");
+	res.setHeader("Cache-Control", "public, max-age=3600, stale-while-revalidate=86400");
+	if (file.endsWith(".wasm")) res.setHeader("Content-Type", "application/wasm");
+	else if (file.endsWith(".mjs") || file.endsWith(".js"))
+		res.setHeader("Content-Type", "text/javascript; charset=utf-8");
+};
+const staticOpts = { setHeaders: assetHeaders, index: false, fallthrough: false };
+
+for (const [route, bundle] of Object.entries(bundles)) {
+	app.get(route, (req, res) => {
+		assetHeaders(res, route);
+		res.setHeader("ETag", bundle.etag);
+		if (req.headers["if-none-match"] === bundle.etag) return res.status(304).end();
+		res.send(bundle.code);
+	});
+}
+app.use("/scramjet", express.static(DIST.scramjet, staticOpts));
+app.use("/controller", express.static(DIST.controller, staticOpts));
+app.get("/transports/epoxy.mjs", (req, res) => {
+	assetHeaders(res, ".mjs");
+	res.sendFile(path.join(DIST.epoxy, "index.mjs"));
+});
+app.get("/transports/libcurl.mjs", (req, res) => {
+	assetHeaders(res, ".mjs");
+	res.sendFile(path.join(DIST.libcurl, "index.mjs"));
+});
+
+// the service worker must never be cached, or users get stuck on old versions
+app.get("/sw.js", (req, res) => {
+	res.setHeader("Service-Worker-Allowed", "/");
+	res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+	res.setHeader("Content-Type", "text/javascript; charset=utf-8");
+	res.sendFile(path.join(PUBLIC, "sw.js"));
+});
+
+// ---- api ----
+
+app.get("/api/health", (req, res) => {
+	res.json({
+		ok: true,
+		name: config.brand.name,
+		scramjet: SCRAMJET_VERSION,
+		patches,
+		uptime: Math.round(process.uptime()),
+		pid: process.pid,
+	});
+});
+
+// explains failed loads for the error page, see diagnose.js
+app.get("/api/diagnose", createDiagnoseHandler(config));
+
+// caddy on_demand_tls ask endpoint. caddy only accepts 2xx as "yes".
+app.get("/api/tls-ask", (req, res) => {
+	const domain = String(req.query.domain || "");
+	if (domains.isAllowed(domain)) return res.status(200).send("ok");
+	res.status(404).send("unknown domain");
+});
+
+// ---- shell ----
+
+app.use(
+	express.static(PUBLIC, {
+		index: "index.html",
+		setHeaders(res, file) {
+			if (file.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
+			else res.setHeader("Cache-Control", "public, max-age=600");
+		},
+	})
+);
+
+app.use((req, res) => {
+	res.status(404).sendFile(path.join(PUBLIC, "404.html"));
+});
+
+// eslint-disable-next-line no-unused-vars
+app.use((err, req, res, next) => {
+	const status = err.status || err.statusCode || 500;
+	if (status >= 500) console.error("[nocturne] request error", req.method, req.url, err);
+	if (res.headersSent) return;
+	if (status === 404) return res.status(404).sendFile(path.join(PUBLIC, "404.html"));
+	res.status(status).type("text/plain").send(status >= 500 ? "internal error" : String(err.message));
+});
+
+// ---------------------------------------------------------------------------
+// http server + websocket upgrades
+// ---------------------------------------------------------------------------
+
+export function createServer() {
+	const server = http.createServer(app);
+	server.keepAliveTimeout = 65_000; // longer than caddy's idle timeout
+	server.headersTimeout = 66_000;
+
+	server.on("upgrade", (req, socket, head) => {
+		const url = new URL(req.url, "http://localhost");
+		if (!url.pathname.startsWith(config.wisp.path)) {
+			socket.end("HTTP/1.1 404 Not Found\r\n\r\n");
+			return;
+		}
+		const allowed = config.wisp.allowedOrigins;
+		if (allowed.length) {
+			const origin = String(req.headers.origin || "").toLowerCase();
+			if (!allowed.includes(origin)) {
+				socket.end("HTTP/1.1 403 Forbidden\r\n\r\n");
+				return;
+			}
+		}
+		socket.on("error", () => {});
+		wisp.routeRequest(req, socket, head);
+	});
+
+	return server;
+}
+
+function main() {
+	const server = createServer();
+
+	server.listen(config.port, config.host, () => {
+		const where = `http://${config.host === "0.0.0.0" ? "localhost" : config.host}:${config.port}`;
+		console.log(`[nocturne] ${config.brand.name} listening on ${where}`);
+		for (const [route, b] of Object.entries(bundles)) {
+			console.log(`[nocturne] ${route}: ${b.applied.length} patches (${b.applied.join(", ") || "none"})`);
+			for (const s of b.skipped) console.warn(`[nocturne] patch skipped in ${route}: ${s.id} (${s.reason})`);
+		}
+		if (!config.domains.allow.length && !config.domains.file)
+			console.log("[nocturne] tls ask endpoint has no domains configured, it will refuse everything");
+		// tell pm2 we are ready (wait_ready: true in ecosystem.config.cjs)
+		process.send?.("ready");
+	});
+
+	// graceful shutdown so `pm2 reload` does not drop in-flight requests
+	let closing = false;
+	const shutdown = (signal) => {
+		if (closing) return;
+		closing = true;
+		console.log(`[nocturne] ${signal}, closing`);
+		server.close(() => process.exit(0));
+		server.closeIdleConnections?.();
+		setTimeout(() => process.exit(0), 8000).unref();
+	};
+	process.on("SIGINT", () => shutdown("SIGINT"));
+	process.on("SIGTERM", () => shutdown("SIGTERM"));
+	process.on("message", (msg) => msg === "shutdown" && shutdown("shutdown message"));
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === path.resolve(ROOT, "src/server.js")) {
+	main();
+}
+
+export { app, bundles };

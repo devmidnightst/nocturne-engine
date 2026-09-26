@@ -1,0 +1,43 @@
+# caddyfile for nocturne engine behind caddy with on-demand tls.
+#
+# the node server runs on 127.0.0.1:8080 (see ecosystem.config.cjs).
+# caddy terminates tls, compresses the big transport bundles and passes
+# websockets (the /wisp/ tunnel) straight through.
+
+{
+	# before issuing a cert for an unknown hostname, caddy asks nocturne.
+	# nocturne answers 200 only for names in TLS_ALLOWED_DOMAINS / TLS_DOMAINS_FILE.
+	on_demand_tls {
+		ask http://127.0.0.1:8080/api/tls-ask
+	}
+}
+
+# shared settings for every nocturne site block
+(nocturne) {
+	encode zstd gzip
+
+	# caddy proxies websocket upgrades (the /wisp/ tunnel) automatically and
+	# sets x-forwarded-for, which the server trusts from loopback
+	reverse_proxy 127.0.0.1:8080 {
+		flush_interval -1
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		-Server
+	}
+}
+
+# your main domain, normal automatic https
+nocturne.lol, www.nocturne.lol {
+	import nocturne
+}
+
+# every other hostname pointed at this box (custom domains, link domains).
+# the cert is fetched on the first request, after the ask check passes.
+https:// {
+	tls {
+		on_demand
+	}
+	import nocturne
+}
