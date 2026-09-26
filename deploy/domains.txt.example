@@ -1,0 +1,5 @@
+# one hostname per line. copy to domains.txt and point TLS_DOMAINS_FILE at it.
+# the server re-reads this file when it changes, no restart needed.
+nocturne.lol
+*.nocturne.lol
+example-custom-domain.com

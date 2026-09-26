@@ -1,0 +1,192 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="theme-color" content="#0b0a14" />
+		<meta name="color-scheme" content="dark" />
+		<meta name="description" content="Nocturne Engine, a fast Scramjet powered web proxy." />
+		<title>Nocturne Engine</title>
+		<link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
+		<link rel="stylesheet" href="/css/nocturne.css" />
+
+		<!-- scramjet runtime + controller + utils. order matters: each one reads the globals of the one before -->
+		<script src="/scramjet/scramjet.js"></script>
+		<script src="/controller/controller.api.js"></script>
+		<script src="/utils/scramjet-utils.js"></script>
+		<script type="module" src="/js/app.js"></script>
+	</head>
+	<body>
+		<div class="bg" aria-hidden="true"></div>
+
+		<header class="bar glass" id="bar">
+			<div class="nav">
+				<button class="icon-btn" id="back" title="back" aria-label="back">
+					<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+				</button>
+				<button class="icon-btn hide-sm" id="forward" title="forward" aria-label="forward">
+					<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg>
+				</button>
+				<button class="icon-btn" id="reload" title="reload" aria-label="reload">
+					<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>
+				</button>
+			</div>
+
+			<form class="omnibox" id="omnibox" autocomplete="off">
+				<button type="button" class="home-mark" id="home" title="home" aria-label="home">
+					<img src="/img/logo.svg" alt="" width="18" height="18" />
+				</button>
+				<input
+					id="address"
+					type="text"
+					inputmode="url"
+					spellcheck="false"
+					autocapitalize="off"
+					enterkeyhint="go"
+					placeholder="search or type a url"
+					aria-label="address"
+				/>
+				<button type="button" class="icon-btn small" id="bookmark" title="bookmark" aria-label="bookmark">
+					<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" /></svg>
+				</button>
+				<div class="progress" id="progress" aria-hidden="true"></div>
+			</form>
+
+			<div class="nav">
+				<button class="icon-btn" id="newtab" title="open in new tab" aria-label="open in new tab">
+					<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
+				</button>
+				<button class="icon-btn" id="menu-btn" title="menu" aria-label="menu">
+					<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+				</button>
+			</div>
+		</header>
+
+		<!-- recovery banner: shown when a page loads blank with js errors -->
+		<div class="banner glass" id="banner" hidden>
+			<div class="banner-text">
+				<strong id="banner-title">this page might be broken</strong>
+				<span id="banner-detail"></span>
+			</div>
+			<div class="banner-actions">
+				<button class="chip" data-action="reload">reload</button>
+				<button class="chip" data-action="compat">compat mode</button>
+				<button class="chip" data-action="transport">switch transport</button>
+				<button class="chip ghost" data-action="dismiss" aria-label="dismiss">✕</button>
+			</div>
+		</div>
+
+		<main class="stage">
+			<section class="home" id="home-view">
+				<div class="hero">
+					<img class="logo" src="/img/logo.svg" alt="" width="84" height="84" />
+					<h1>Nocturne Engine</h1>
+					<p class="tagline">a quieter way through the web</p>
+					<form class="hero-search glass" id="hero-form" autocomplete="off">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></svg>
+						<input
+							id="hero-input"
+							type="text"
+							spellcheck="false"
+							autocapitalize="off"
+							enterkeyhint="go"
+							placeholder="search the web or enter a url"
+							aria-label="search or url"
+						/>
+					</form>
+					<div class="quick" id="quick"></div>
+				</div>
+				<div class="home-lists">
+					<section class="glass list-card" id="bookmarks-card">
+						<h2>bookmarks</h2>
+						<ul id="bookmarks-list" class="link-list"></ul>
+					</section>
+				</div>
+				<footer class="about">
+					<span id="engine-version">Nocturne Engine</span>
+					<span class="dot">·</span>
+					<button class="link-btn" id="about-link">about</button>
+				</footer>
+			</section>
+
+			<div class="frame-wrap" id="frame-wrap" hidden>
+				<iframe id="frame" title="Nocturne Engine viewport" allow="fullscreen; clipboard-read; clipboard-write; autoplay; encrypted-media; picture-in-picture; microphone; camera; display-capture" allowfullscreen></iframe>
+			</div>
+
+			<div class="boot" id="boot">
+				<img class="logo pulse" src="/img/logo.svg" alt="" width="56" height="56" />
+				<p id="boot-status">starting nocturne engine</p>
+			</div>
+		</main>
+
+		<!-- slide over panel: settings, history, bookmarks, about -->
+		<aside class="panel glass" id="panel" hidden aria-label="menu">
+			<nav class="tabs" role="tablist">
+				<button role="tab" data-tab="settings" class="active">settings</button>
+				<button role="tab" data-tab="history">history</button>
+				<button role="tab" data-tab="bookmarks">bookmarks</button>
+				<button role="tab" data-tab="about">about</button>
+				<button class="icon-btn small close" id="panel-close" aria-label="close">
+					<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+				</button>
+			</nav>
+
+			<div class="tab-body" data-body="settings">
+				<label class="field">
+					<span>transport</span>
+					<select id="set-transport">
+						<option value="epoxy">epoxy (wisp, rust tls)</option>
+						<option value="libcurl">libcurl (wisp, curl tls)</option>
+					</select>
+					<small>if a site fails to load or tls errors show up, try the other one.</small>
+				</label>
+				<label class="field">
+					<span>search engine</span>
+					<select id="set-search"></select>
+				</label>
+				<label class="toggle">
+					<input type="checkbox" id="set-adblock" />
+					<span>block ads &amp; trackers</span>
+				</label>
+				<label class="field">
+					<span>wisp server</span>
+					<input type="text" id="set-wisp" spellcheck="false" placeholder="same server (default)" />
+					<small>leave empty to use this server. must end with a slash.</small>
+				</label>
+				<div class="field">
+					<span>compat mode sites</span>
+					<ul id="compat-list" class="chips"></ul>
+					<small>sites here run with the riskier rewriter features turned off.</small>
+				</div>
+				<details class="field">
+					<summary>developer</summary>
+					<label class="toggle">
+						<input type="checkbox" id="set-rewriterlogs" />
+						<span>rewriter debug logs (console)</span>
+					</label>
+					<div class="diag" id="diag"></div>
+				</details>
+				<button class="danger" id="clear-data">clear proxied cookies &amp; site data</button>
+			</div>
+
+			<div class="tab-body" data-body="history" hidden>
+				<ul id="history-list" class="link-list"></ul>
+				<button class="ghost-btn" id="clear-history">clear history</button>
+			</div>
+
+			<div class="tab-body" data-body="bookmarks" hidden>
+				<ul id="panel-bookmarks" class="link-list"></ul>
+			</div>
+
+			<div class="tab-body about-body" data-body="about" hidden>
+				<img src="/img/logo.svg" alt="" width="48" height="48" />
+				<h3>Nocturne Engine</h3>
+				<p>a web proxy built on Scramjet by Mercury Workshop, with nocturne's own rewriter fixes, error pages, content blocker and recovery tools on top.</p>
+				<dl id="about-versions"></dl>
+				<p class="muted">scramjet and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
+			</div>
+		</aside>
+
+		<div class="toast" id="toast" role="status" aria-live="polite"></div>
+	</body>
+</html>

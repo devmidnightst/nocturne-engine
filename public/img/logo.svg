@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+	<!-- nocturne engine logo placeholder: crescent moon over an orbit ring -->
+	<defs>
+		<linearGradient id="n" x1="10" y1="6" x2="54" y2="58" gradientUnits="userSpaceOnUse">
+			<stop stop-color="#cfc4ff" />
+			<stop offset="1" stop-color="#6a55ff" />
+		</linearGradient>
+	</defs>
+	<circle cx="32" cy="32" r="29" stroke="url(#n)" stroke-opacity=".35" stroke-width="2" />
+	<path d="M40.5 12.5a20 20 0 1 0 11 30.5A17 17 0 0 1 40.5 12.5z" fill="url(#n)" />
+	<circle cx="46" cy="18" r="2.2" fill="#e9e4ff" />
+</svg>
