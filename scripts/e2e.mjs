@@ -148,6 +148,27 @@ async function runIdleReuse(transport, { knownBroken = false } = {}) {
 	await context.close();
 }
 
+// a page that leaves 20 requests hanging, then a page with 31 parallel requests.
+// scramjet never cancels the first page's requests, so before the abort on
+// unload in engine.js libcurl's per host connections stayed full and the
+// second page froze until the hanging ones timed out.
+async function runAbandoned(transport) {
+	const { context, page } = await newShell(transport);
+	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "hang.html")}`);
+	await page.waitForFunction(() => document.getElementById("frame").contentDocument?.title === "hang", null, { timeout: 30_000 });
+	await page.waitForTimeout(1000);
+	await page.fill("#address", fixtureUrl + "soak-heavy.html");
+	await page.press("#address", "Enter");
+	try {
+		await page.waitForFunction(() => document.getElementById("frame").contentDocument?.title === "heavy done", null, { timeout: 20_000 });
+		const res = JSON.parse(await proxyFrame(page).innerText("#results"));
+		res.bad === 0 ? pass(`page after abandoned requests loads over ${transport}`) : fail(`page after abandoned requests over ${transport}: ${JSON.stringify(res)}`);
+	} catch {
+		fail(`page after abandoned requests over ${transport}: stuck`);
+	}
+	await context.close();
+}
+
 async function runErrorPage() {
 	console.log("\nerror pages");
 	const { context, page } = await newShell("epoxy");
@@ -211,6 +232,9 @@ try {
 	console.log("\nkeep alive reuse");
 	await runIdleReuse("libcurl");
 	await runIdleReuse("epoxy", { knownBroken: true });
+	console.log("\nabandoned requests");
+	await runAbandoned("libcurl");
+	await runAbandoned("epoxy");
 	await runErrorPage();
 	await runBlocker();
 	await runRealSites();
