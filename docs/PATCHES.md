@@ -48,6 +48,12 @@ tested by the "setAttribute with a non string name" e2e check.
 
 same bug as #184, in `XMLHttpRequest.prototype.getResponseHeader`.
 
+### `media-src-readback`
+
+players attach media source extensions with `audio.src = URL.createObjectURL(mediaSource)`. scramjet hooks `createObjectURL` to hand back a blob url on the site's origin, but reading `audio.src` back returned the real blob url on nocturne's origin, so `audio.src === url` was false. `audio.currentSrc` wasn't hooked at all and returned the `/~/sj/` proxy url. players compare these to tell whether the element is still theirs. both getters now return what the site set.
+
+tested by the "media element src reads back what was set" and "currentSrc is the real url" e2e checks.
+
 ## controller.inject.js
 
 ### `websocket-open-order`
@@ -73,6 +79,17 @@ tested by the "websocket, server speaks first (discord gateway pattern)" e2e che
 the patch keeps the original raw headers on the response the page gets. the cached copy still has no cookies, which is what you want in a shared cache.
 
 tested by the "cookies round trip" e2e check.
+
+### `http-cache-skips-media`
+
+two bugs in `HttpCachePlugin` that break audio:
+
+- it matched cached responses by url only. once a full copy of an audio file was cached, a `Range: bytes=100-199` request got the whole file back as a 200. music players (spotify's web player among them) fetch audio from their cdn in byte ranges, and a wrong range means undecodable audio.
+- it read every cacheable 200 to the end before handing it to the page. a response that never finishes (internet radio, live streams) never started playing, and every audio segment was copied into cache storage.
+
+range requests, audio/video requests and audio, video, youtube ump and event stream responses now skip the cache.
+
+tested by the "range request after a full download of the same file" and "live stream starts before it ends" e2e checks.
 
 ## libcurl.mjs (libcurl-transport 2.0.5)
 

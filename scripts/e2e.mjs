@@ -30,7 +30,8 @@ const base = `http://127.0.0.1:${nocturne.address().port}`;
 
 const browser = await chromium.launch({
 	executablePath: process.env.CHROME_PATH || (fs.existsSync("/opt/pw-browsers/chromium-1194/chrome-linux/chrome") ? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" : undefined),
-	args: ["--no-sandbox"],
+	// music sites start playback from a click, the e2e run has no user to click
+	args: ["--no-sandbox", "--autoplay-policy=no-user-gesture-required"],
 });
 
 let failures = 0;
@@ -94,6 +95,43 @@ async function runFixture(transport) {
 	}
 	const address = await page.inputValue("#address");
 	address.startsWith(fixtureUrl) ? pass("omnibox shows the real url") : fail(`omnibox shows ${address}`);
+	await context.close();
+}
+
+// audio playback: <audio> with range requests, mse fed from fetch/xhr (how
+// youtube music streams), web audio and eme. the fixture page is loaded once
+// directly first, so a failure that also happens without the proxy is reported
+// as a fixture problem instead of a proxy bug.
+async function runMedia(transport) {
+	console.log(`\naudio playback over ${transport}`);
+	const waitDone = (page, getDoc) =>
+		page.waitForFunction(getDoc, null, { timeout: 90_000 });
+	const direct = await browser.newPage();
+	await direct.goto(fixtureUrl + "media.html");
+	await waitDone(direct, () => document.title === "media done");
+	const baseline = JSON.parse(await direct.innerText("#results"));
+	await direct.close();
+
+	const { context, page } = await newShell(transport);
+	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "media.html")}`);
+	try {
+		await waitDone(page, () => {
+			try {
+				return document.getElementById("frame").contentDocument?.title === "media done";
+			} catch {
+				return false;
+			}
+		});
+	} catch {
+		fail("media page never finished (timed out)");
+		await context.close();
+		return;
+	}
+	const results = JSON.parse(await proxyFrame(page).innerText("#results"));
+	for (const [name, value] of Object.entries(results)) {
+		if (baseline[name] !== true) console.log(`  \x1b[33mskip\x1b[0m ${name}: fails without the proxy too (${baseline[name]})`);
+		else value === true ? pass(name) : fail(`${name}: ${value}`);
+	}
 	await context.close();
 }
 
@@ -226,6 +264,8 @@ async function runRealSites() {
 try {
 	await runFixture("epoxy");
 	await runFixture("libcurl");
+	await runMedia("libcurl");
+	await runMedia("epoxy");
 	console.log("\nwebsocket timing");
 	await runLoneSend("epoxy");
 	await runLoneSend("libcurl");

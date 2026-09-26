@@ -6,7 +6,7 @@ it's built on the pinned 2.x packages (scramjet `2.0.67-alpha.2`, scramjet-contr
 
 what makes it better than the stock scramjet demos:
 
-- **nine patches to the 2.x bundles** fix real bugs, and the e2e suite fails on stock scramjet for every one of them it covers. two are aimed right at discord: websockets where the server talks first (the gateway), and set-cookie getting dropped by the http cache. details are in [docs/PATCHES.md](docs/PATCHES.md).
+- **eleven patches to the 2.x bundles** fix real bugs, and the e2e suite fails on stock scramjet for every one of them it covers. two are aimed right at discord: websockets where the server talks first (the gateway), and set-cookie getting dropped by the http cache. details are in [docs/PATCHES.md](docs/PATCHES.md).
 - **error pages that say what actually broke**. stock scramjet shows "Internal Service Worker Error" for everything. nocturne tells you whether the domain doesn't exist, the server blocked it, the site refused, it timed out or tls failed. it asks the server to redo the dns and tcp step when the transport's own error is too vague.
 - **recovery**. when a page throws rewriter errors or loads blank, a banner offers a reload, compat mode for that site, or switching transport.
 - **optional ad and tracker blocking**, answered locally inside the proxied page, plus discord's telemetry endpoints.
@@ -204,6 +204,7 @@ the e2e suite starts the server and a local fixture site, then loads the fixture
 - `eval` and `new Function` scope
 - `history.pushState`, `toString` source
 - keyword glue, `setAttribute` coercion, a same origin child iframe
+- audio playback (test/fixture/site/media.html): `<audio>` with range requests and seeking, media source extensions fed from fetch, xhr, a streamed body and a binary POST (how youtube music streams), range requests after a cached full download (how spotify fetches audio), live streams, web audio, eme clearkey and the media element `src`/`currentSrc` getters
 
 it also checks the error page and the ad blocker. `NOCTURNE_E2E_URLS=https://a.com,https://b.com` adds real site smoke tests with screenshots. `CHROME_PATH` points it at a chromium binary if playwright can't find one.
 
