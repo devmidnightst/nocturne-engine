@@ -179,7 +179,7 @@ const DISABLED = new Set(
 );
 
 // applies every patch whose edits all match exactly once. mutates applied/skipped.
-function applyPatches(source, patches, applied, skipped) {
+export function applyPatches(source, patches, applied, skipped) {
 	let code = source;
 	for (const patch of patches) {
 		if (DISABLED.has("all") || DISABLED.has(patch.id)) {
@@ -200,7 +200,7 @@ function applyPatches(source, patches, applied, skipped) {
 	return code;
 }
 
-function stripSourceMap(code) {
+export function stripSourceMap(code) {
 	const m = code.match(/\n\/\/# sourceMappingURL=.*\s*$/);
 	return m ? code.slice(0, m.index) : code;
 }
@@ -212,10 +212,10 @@ function stripSourceMap(code) {
 export const CONTROLLER_INJECT_PATCHES = [
 	{
 		id: "websocket-open-order",
-		why: "the proxied page's websocket gets its data over one MessagePort and its open event over another (the rpc reply), so a server that talks first (discord's gateway sends HELLO the instant you connect) delivered a message before `open`. the page then replied with ws.send() while readyState was still CONNECTING, which throws. queue data until open fires. also drops the console noise logged for every socket.",
+		why: "the proxied page's websocket gets its data over one MessagePort and its open event over another (the rpc reply), so a server that talks first (discord's gateway sends HELLO the instant you connect) delivered a message before `open`. the page then replied with ws.send() while readyState was still CONNECTING, which throws. queue data until open fires. a socket that fails to connect also gets its close event (1006) after the error, like in a browser, so pages that reconnect from onclose try again. also drops the console noise logged for every socket.",
 		find: 'return console.warn("connecting"),this.rpc.call("connect",{url:e.href,protocols:t,requestHeaders:o,port:c.port2},[c.port2]).then(e=>{console.log(e),"success"===e.result?r(e.protocol,e.extensions):a(e.error)}),l.onmessage=e=>{let t=e.data;"data"===t.type?i(t.data):"close"===t.type&&s(t.code,t.reason)}',
 		replace:
-			'let __q=[],__open=!1,__dispatch=e=>{"data"===e.type?i(e.data):"close"===e.type&&s(e.code,e.reason)};return this.rpc.call("connect",{url:e.href,protocols:t,requestHeaders:o,port:c.port2},[c.port2]).then(e=>{if("success"===e.result){__open=!0,r(e.protocol,e.extensions);let t=__q;__q=null;for(let e of t)__dispatch(e)}else __q=null,a(e.error)}),l.onmessage=e=>{__open?__dispatch(e.data):__q&&__q.push(e.data)}',
+			'let __q=[],__open=!1,__dispatch=e=>{"data"===e.type?i(e.data):"close"===e.type&&s(e.code,e.reason)};return this.rpc.call("connect",{url:e.href,protocols:t,requestHeaders:o,port:c.port2},[c.port2]).then(e=>{if("success"===e.result){__open=!0,r(e.protocol,e.extensions);let t=__q;__q=null;for(let e of t)__dispatch(e)}else __q=null,a(e.error),s(1006,"")}),l.onmessage=e=>{__open?__dispatch(e.data):__q&&__q.push(e.data)}',
 	},
 	{
 		id: "websocket-close-reason",
