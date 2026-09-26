@@ -9,6 +9,7 @@ import {
 	buildPatchedUtils,
 	SCRAMJET_VERSION,
 } from "./scramjet-patches.js";
+import { buildPatchedLibcurl } from "./libcurl-patches.js";
 import { packageDir, packageVersion as version } from "./packages.js";
 
 let failed = false;
@@ -50,6 +51,7 @@ for (const [name, build] of [
 	["scramjet.js", buildPatchedScramjet],
 	["controller.inject.js", buildPatchedControllerInject],
 	["scramjet-utils.js", buildPatchedUtils],
+	["libcurl.mjs", buildPatchedLibcurl],
 ]) {
 	const { applied, skipped } = build();
 	for (const id of applied) ok(`patch ${name}: ${id}`);

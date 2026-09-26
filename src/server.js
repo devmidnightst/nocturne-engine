@@ -17,6 +17,7 @@ import {
 	scramjetDistDir,
 	SCRAMJET_VERSION,
 } from "./scramjet-patches.js";
+import { buildPatchedLibcurl } from "./libcurl-patches.js";
 import { createDomainAllowlist } from "./domains.js";
 import { createDiagnoseHandler } from "./diagnose.js";
 import { packageDir as pkgDir } from "./packages.js";
@@ -26,18 +27,18 @@ const DIST = {
 	scramjet: scramjetDistDir(),
 	controller: path.join(pkgDir("@mercuryworkshop/scramjet-controller"), "dist"),
 	epoxy: path.join(pkgDir("@mercuryworkshop/epoxy-transport"), "dist"),
-	libcurl: path.join(pkgDir("@mercuryworkshop/libcurl-transport"), "dist"),
 };
 const PUBLIC = path.join(ROOT, "public");
 
 // ---------------------------------------------------------------------------
-// scramjet bundles, patched once at boot and served from memory
+// scramjet bundles and the libcurl transport, patched once at boot and served from memory
 // ---------------------------------------------------------------------------
 
 const bundles = {
 	"/scramjet/scramjet.js": buildPatchedScramjet(),
 	"/controller/controller.inject.js": buildPatchedControllerInject(),
 	"/utils/scramjet-utils.js": buildPatchedUtils(),
+	"/transports/libcurl.mjs": buildPatchedLibcurl(),
 };
 for (const [route, b] of Object.entries(bundles)) {
 	b.etag = `"nocturne-${Buffer.from(route).toString("base64url")}-${b.applied.length}-${b.code.length}"`;
@@ -99,10 +100,6 @@ app.use("/controller", express.static(DIST.controller, staticOpts));
 app.get("/transports/epoxy.mjs", (req, res) => {
 	assetHeaders(res, ".mjs");
 	res.sendFile(path.join(DIST.epoxy, "index.mjs"));
-});
-app.get("/transports/libcurl.mjs", (req, res) => {
-	assetHeaders(res, ".mjs");
-	res.sendFile(path.join(DIST.libcurl, "index.mjs"));
 });
 
 // the service worker must never be cached, or users get stuck on old versions
