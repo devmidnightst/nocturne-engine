@@ -273,3 +273,15 @@ umbrella is AGPL-3.0 (`LICENSE`) with extra terms in `NOTICE`, added under secti
 - like any AGPL program, if you run a modified version for other people, you have to offer them its source.
 
 scramjet, the controller, scramjet-utils and both transports are AGPL-3.0 by Mercury Workshop and keep their own licenses. the extra terms only cover umbrella's own code.
+
+
+## credits
+
+made by:
+
+me (midnight)
+claude (worlds sexiest AI)
+chatgpt (ideas)
+gemini (fuck this ai)
+grok (currently helping to port to S3)
+zinko (emotional support)
