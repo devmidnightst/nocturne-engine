@@ -226,11 +226,11 @@ async function registerServiceWorker(onStatus) {
 	if (!("serviceWorker" in navigator)) {
 		throw new Error("this browser has no service worker support (private mode in firefox disables it)");
 	}
-	onStatus?.("registering service worker");
+	onStatus?.("starting up");
 	const reg = await navigator.serviceWorker.register("/sw.js", { scope: "/", updateViaCache: "none" });
 
 	if (!navigator.serviceWorker.controller) {
-		onStatus?.("activating service worker");
+		onStatus?.("starting up");
 		await Promise.race([
 			new Promise((resolve) =>
 				navigator.serviceWorker.addEventListener("controllerchange", resolve, { once: true })
@@ -264,10 +264,10 @@ function followServiceWorker(controller, reg) {
 export async function createEngine(events = {}, onStatus) {
 	const { sw, reg } = await registerServiceWorker(onStatus);
 
-	onStatus?.("starting transport");
+	onStatus?.("starting up");
 	let transport = await createTransport();
 
-	onStatus?.("starting controller");
+	onStatus?.("starting up");
 	const controller = new Controller({
 		serviceworker: sw,
 		transport,
