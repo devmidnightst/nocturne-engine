@@ -2,6 +2,17 @@ import { createEngine, versionInfo } from "./engine.js";
 import { resolveInput } from "./omnibox.js";
 import { settings, bookmarks, history, SEARCH_ENGINES, defaultWispUrl } from "./store.js";
 
+const nestedInShell = (() => {
+	if (window.self === window.top) return false;
+	try {
+		if (window.top.location.origin !== location.origin) return false;
+		window.top.location.replace(location.href);
+		return true;
+	} catch {
+		return false;
+	}
+})();
+
 const $ = (id) => document.getElementById(id);
 
 const ui = {
@@ -104,9 +115,22 @@ function setLoading(on) {
 	if (on) loadingTimer = setTimeout(() => ui.progress.classList.remove("active"), 30_000);
 }
 
+const CURRENT_KEY = "umbrella:current";
+
 function history_replace(url) {
-	const next = url ? `/?go=${encodeURIComponent(url)}` : "/";
-	if (location.pathname + location.search !== next) window.history.replaceState(null, "", next);
+	try {
+		if (url) sessionStorage.setItem(CURRENT_KEY, url);
+		else sessionStorage.removeItem(CURRENT_KEY);
+	} catch {}
+	if (location.pathname + location.search + location.hash !== "/") window.history.replaceState(null, "", "/");
+}
+
+function restoredUrl() {
+	try {
+		return sessionStorage.getItem(CURRENT_KEY);
+	} catch {
+		return null;
+	}
 }
 
 function navigate(raw) {
@@ -446,8 +470,9 @@ async function boot() {
 	renderQuick();
 	renderHomeLists();
 
-	const go = new URLSearchParams(location.search).get("go");
+	const go = new URLSearchParams(location.search).get("go") || restoredUrl();
 	if (go) pendingGo = resolveInput(go);
+	if (location.pathname + location.search + location.hash !== "/") window.history.replaceState(null, "", "/");
 
 	try {
 		engine = await createEngine(ui.frame, engineEvents, (s) => (ui.bootStatus.textContent = s));
@@ -470,4 +495,4 @@ async function boot() {
 	}
 }
 
-boot();
+if (!nestedInShell) boot();

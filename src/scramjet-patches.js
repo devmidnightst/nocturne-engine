@@ -168,6 +168,13 @@ export const PATCHES = [
 		replace: '"link"===`${t.args[0]}`.toLowerCase()&&t.return(s(r,e.context))',
 	},
 	{
+		id: "history-state-no-url",
+		why: "history.pushState(state, title) and replaceState(state, title, undefined) mean \"keep the current url\", but the hook turned the missing url into the string \"undefined\" (or \"null\") and navigated the page to /undefined. duckduckgo does this after every search, so the address bar and a reload landed on duckduckgo.com/undefined.",
+		find: 'let r=e.box.histories.get(t.this),s=(0,n.Qf)(t.args[2]);if(n.xP.canParse(s)&&new n.xP(s).origin!==r.url.origin)return t.return(void 0);(s||""===s)&&(t.args[2]=r.rewriteUrl(s)),',
+		replace:
+			'let r=e.box.histories.get(t.this),__hasUrl=null!=t.args[2],s=__hasUrl?(0,n.Qf)(t.args[2]):"";if(__hasUrl&&n.xP.canParse(s)&&new n.xP(s).origin!==r.url.origin)return t.return(void 0);__hasUrl&&(t.args[2]=r.rewriteUrl(s)),',
+	},
+	{
 		id: "media-src-readback",
 		why: "a player that does `audio.src = URL.createObjectURL(mediaSource)` got a blob url on the site's origin from the hooked createObjectURL, but reading audio.src back returned the real blob url on the proxy's origin, so `audio.src === url` was false. audio.currentSrc was not hooked at all and returned the /~/sj/ proxy url. players compare these to tell whether the element still belongs to them. both getters now return what the site set.",
 		edits: [

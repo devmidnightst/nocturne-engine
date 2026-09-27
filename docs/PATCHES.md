@@ -54,6 +54,12 @@ players attach media source extensions with `audio.src = URL.createObjectURL(med
 
 tested by the "media element src reads back what was set" and "currentSrc is the real url" e2e checks.
 
+### `history-state-no-url`
+
+`history.pushState(state, title)` and `history.replaceState(state, title, undefined)` mean "keep the current url". scramjet's hook turned the missing url into the string `"undefined"` (or `"null"`) and moved the page to `/undefined`. duckduckgo does this after every search, so the address bar and any reload landed on `duckduckgo.com/undefined`.
+
+tested by the "history state without a url keeps the page url" e2e check.
+
 ## controller.inject.js
 
 ### `websocket-open-order`

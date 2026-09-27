@@ -225,6 +225,58 @@ async function runErrorPage() {
 	await context.close();
 }
 
+async function runShell() {
+	console.log("\nshell");
+	const { context, page } = await newShell("libcurl");
+	const frameText = () => page.evaluate(() => document.getElementById("frame").contentDocument?.body?.innerText ?? "");
+	const waitChild = () => page.waitForFunction(() => document.getElementById("frame").contentDocument?.body?.innerText?.includes("child"), null, { timeout: 30_000 });
+	const go = async (url) => {
+		await page.fill("#address", url);
+		await page.press("#address", "Enter");
+	};
+	try {
+		await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "child.html")}`);
+		await waitChild();
+		const path = () => new URL(page.url()).pathname + new URL(page.url()).search;
+		path() === "/" ? pass("address bar stays on the bare site while browsing") : fail(`address bar shows ${path()}`);
+
+		// duckduckgo calls replaceState(state, "", undefined) after every search
+		await proxyFrame(page).evaluate(() => {
+			history.replaceState(null, "", undefined);
+			history.pushState(null, "");
+		});
+		await page.waitForTimeout(300);
+		const addr = await page.inputValue("#address");
+		addr === fixtureUrl + "child.html" ? pass("history state without a url keeps the page url") : fail(`history state without a url moved the page to ${addr}`);
+
+		// chrome stops an idle service worker after about 30s and the restarted
+		// worker has forgotten every tab. the next navigation used to fall
+		// through to the server and show its 404 page.
+		const cdp = await context.newCDPSession(page);
+		await cdp.send("ServiceWorker.enable");
+		await cdp.send("ServiceWorker.stopAllWorkers");
+		await page.waitForTimeout(300);
+		await go(fixtureUrl + "child.html?after-sw-stop");
+		await page.waitForTimeout(3000);
+		const text = await frameText();
+		text.includes("child") ? pass("navigating after the service worker was stopped still loads the page") : fail(`navigating after a service worker stop showed: ${text.slice(0, 60)}`);
+
+		await page.reload();
+		await page.waitForSelector("#boot", { state: "hidden", timeout: 30_000 });
+		await waitChild();
+		const restored = await page.inputValue("#address");
+		restored === fixtureUrl + "child.html?after-sw-stop" ? pass("reloading the tab reopens the current site") : fail(`reload opened ${restored}`);
+
+		await page.evaluate(() => (document.getElementById("frame").src = "/"));
+		await page.waitForTimeout(3000);
+		const nested = await page.evaluate(() => !!document.getElementById("frame").contentDocument?.getElementById("address"));
+		!nested && page.frames().length === 2 ? pass("the shell never shows up inside its own frame") : fail("the shell loaded inside its own frame (two address bars)");
+	} catch (err) {
+		fail(`shell checks: ${err.message}`);
+	}
+	await context.close();
+}
+
 async function runBlocker() {
 	console.log("\ncontent blocker");
 	const { context, page } = await newShell("epoxy");
@@ -276,6 +328,7 @@ try {
 	await runAbandoned("libcurl");
 	await runAbandoned("epoxy");
 	await runErrorPage();
+	await runShell();
 	await runBlocker();
 	await runRealSites();
 } finally {
