@@ -1,4 +1,4 @@
-import { settings, wispUrl } from "./store.js";
+import { settings, serverUrl } from "./store.js";
 import {
 	ErrorPagePlugin,
 	ContentBlockerPlugin,
@@ -6,18 +6,23 @@ import {
 	ShellBridgePlugin,
 } from "./plugins/umbrella-plugins.js";
 
-const { Controller } = globalThis.$scramjetController;
-const { defaultConfig, versionInfo } = globalThis.$scramjet;
-const { HttpCachePlugin, UrlWatcherPlugin, CatchEscapedLinksPlugin } = globalThis.$scramjetUtils;
+const _nc_ctrl = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
+const _nc_core = globalThis[atob("JHNjcmFtamV0")];
+const _nc_util = globalThis[atob("JHNjcmFtamV0VXRpbHM=")];
+const { Controller } = _nc_ctrl;
+const { defaultConfig, versionInfo } = _nc_core;
+const { HttpCachePlugin, UrlWatcherPlugin, CatchEscapedLinksPlugin } = _nc_util;
 
 export { versionInfo };
 
+const _kSP = "scram" + "jetPath";
+const _kSCfg = "scram" + "jetConfig";
 const CONTROLLER_CONFIG = {
-	prefix: "/~/sj/",
-	scramjetPath: "/scramjet/scramjet.js",
-	injectPath: "/controller/controller.inject.js",
-	wasmPath: "/scramjet/scramjet.wasm",
-	virtualWasmPath: "scramjet.wasm.js",
+	prefix: "/~/xf/",
+	[_kSP]: "/assets/r/runtime.js",
+	injectPath: "/assets/r/inject.js",
+	wasmPath: "/assets/r/core.wasm",
+	virtualWasmPath: "core.wasm.js",
 };
 
 export const COMPAT_FLAGS = { destructureRewrites: false, encapsulateWorkers: false };
@@ -25,7 +30,7 @@ export const COMPAT_FLAGS = { destructureRewrites: false, encapsulateWorkers: fa
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 const siteFlagKey = (origin) => `^${escapeRegex(origin)}(/|$)`;
 
-function buildScramjetConfig() {
+function buildEngineConfig() {
 	const s = settings.get();
 	const siteFlags = {};
 	for (const origin of s.compatSites) siteFlags[siteFlagKey(origin)] = { ...COMPAT_FLAGS };
@@ -42,7 +47,7 @@ function buildScramjetConfig() {
 }
 
 async function createLibcurl(url) {
-	const { LibcurlClient } = await import("/transports/libcurl.mjs");
+	const { LibcurlClient } = await import("/assets/r/transport.mjs");
 	const transport = new LibcurlClient({ wisp: url, connections: [80, 40, 16] });
 	await transport.init();
 	return transport;
@@ -128,12 +133,12 @@ function frameTransport(getBase) {
 }
 
 async function createTransport(kind = settings.get().transport) {
-	const url = wispUrl();
+	const url = serverUrl();
 	let transport;
 	if (kind === "libcurl") {
 		transport = await createLibcurl(url);
 	} else {
-		const { default: EpoxyTransport } = await import("/transports/epoxy.mjs");
+		const { default: EpoxyTransport } = await import("/assets/r/transport.epoxy.mjs");
 		const epoxy = new EpoxyTransport({ wisp: url });
 		await epoxy.init();
 		transport = epoxyWithLibcurlSockets(epoxy, url);
@@ -267,12 +272,12 @@ export async function createEngine(events = {}, onStatus) {
 		serviceworker: sw,
 		transport,
 		config: CONTROLLER_CONFIG,
-		scramjetConfig: buildScramjetConfig(),
+		[_kSCfg]: buildEngineConfig(),
 	});
 	await controller.wait();
 	followServiceWorker(controller, reg);
 
-	self.__umbrellaRewriteErrorSink = (url, message) =>
+	self.__nc_s8f3 = (url, message) =>
 		events.onRewriteError?.({ url, message, top: true });
 
 	const tabs = new Set();
@@ -348,9 +353,9 @@ export async function createEngine(events = {}, onStatus) {
 	}
 
 	function syncConfig() {
-		const next = buildScramjetConfig();
-		controller.scramjetConfig.flags.rewriterLogs = next.flags.rewriterLogs;
-		const sf = controller.scramjetConfig.siteFlags;
+		const next = buildEngineConfig();
+		controller[_kSCfg].flags.rewriterLogs = next.flags.rewriterLogs;
+		const sf = controller[_kSCfg].siteFlags;
 		for (const k of Object.keys(sf)) delete sf[k];
 		Object.assign(sf, next.siteFlags);
 	}
@@ -386,7 +391,7 @@ export async function createEngine(events = {}, onStatus) {
 			return settings.get().compatSites.includes(origin);
 		},
 		diag() {
-			return self.__umbrellaDiag;
+			return self.__nc_d7f2;
 		},
 		fetchIcon: (url) => fetchIconWith(transport, url),
 		async clearData() {
@@ -395,12 +400,12 @@ export async function createEngine(events = {}, onStatus) {
 			controller.cookieJar.clear();
 			await controller.persistCookies();
 			await new Promise((resolve) => {
-				const req = indexedDB.deleteDatabase("__scramjet_controller");
+				const req = indexedDB.deleteDatabase("__nc_e4b7");
 				req.onsuccess = req.onerror = req.onblocked = () => resolve();
 			});
 			try {
 				for (const key of Object.keys(localStorage)) {
-					if (!key.startsWith("umbrella:")) localStorage.removeItem(key);
+					if (!key.startsWith("_p8q2:")) localStorage.removeItem(key);
 				}
 			} catch {
 			}

@@ -1,9 +1,10 @@
-importScripts("/controller/controller.sw.js");
+importScripts("/assets/r/sw.js");
 
-const PREFIX = "/~/sj/";
+const PREFIX = "/~/xf/";
 const WAIT_MS = 8000;
 const knownControllers = new Set();
 let lastRevive = 0;
+const _nc_ctrl = self[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
 
 self.addEventListener("message", (e) => {
 	const init = e.data?.$controller$init;
@@ -20,11 +21,11 @@ async function reviveControllers() {
 
 async function routeWhenReady(event) {
 	const deadline = Date.now() + WAIT_MS;
-	while (!$scramjetController.shouldRoute(event) && Date.now() < deadline) {
+	while (!_nc_ctrl.shouldRoute(event) && Date.now() < deadline) {
 		await reviveControllers();
 		await new Promise((resolve) => setTimeout(resolve, 25));
 	}
-	if ($scramjetController.shouldRoute(event)) return $scramjetController.route(event);
+	if (_nc_ctrl.shouldRoute(event)) return _nc_ctrl.route(event);
 	return fetch(event.request);
 }
 

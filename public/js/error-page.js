@@ -12,7 +12,7 @@ const KINDS = [
 		id: "blocked",
 		test: /(HostBlocked|host blocked|access denied|forbidden by the server)/i,
 		title: "this address is blocked by the server",
-		hint: "the wisp server refuses private, loopback and some port ranges for safety.",
+		hint: "the server refuses private, loopback and some port ranges for safety.",
 	},
 	{
 		id: "refused",
@@ -132,7 +132,7 @@ export function renderErrorPage({ url, error, kind = classifyError(error), statu
 <details><summary>technical details</summary><code>${escape(kind.id)}: ${escape(detail)}</code></details>
 </main>
 <script>
-const send = (action) => parent.postMessage({ __umbrella: action }, location.origin);
+const send = (action) => parent.postMessage({ __nc_m9d1: action }, location.origin);
 document.getElementById("retry").onclick = () => location.reload();
 document.getElementById("transport").onclick = () => send("switch-transport");
 document.getElementById("home").onclick = () => send("home");

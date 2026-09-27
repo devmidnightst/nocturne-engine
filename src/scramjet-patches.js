@@ -40,53 +40,49 @@ const GLUE_KEYWORDS = [
 // prepended to the bundle. runs in every realm that loads scramjet.
 // kept as plain es2020 so it parses everywhere scramjet itself does.
 const PRELUDE = `
-var __umbrellaGlueKeywords = ${JSON.stringify(GLUE_KEYWORDS)}.map(function (k) {
+var __nc_g3a1 = ${JSON.stringify(GLUE_KEYWORDS)}.map(function (k) {
 	return Array.from(k, function (c) { return c.charCodeAt(0); });
 });
-var __umbrellaMarker = Array.from("$scramjet$", function (c) { return c.charCodeAt(0); });
-function __umbrellaIsIdent(b) {
+var __nc_m2b8 = Array.from("$scramjet$", function (c) { return c.charCodeAt(0); });
+function __nc_i5c4(b) {
 	return (b >= 48 && b <= 57) || (b >= 65 && b <= 90) || (b >= 97 && b <= 122) || b === 36 || b === 95 || b > 127;
 }
-// fixes "typeof$scramjet$wrap(x)" style output in place without changing the
-// byte length, so scramjet's own source maps (used for Function.prototype.toString
-// and error stacks) stay valid. "kw$scramjet$name(" becomes "kw $scramjet$nam(",
-// and the shortened name is aliased back to the real helper below.
-function __umbrellaFixGlue(bytes) {
+function __nc_f6d9(bytes) {
 	if (!(bytes instanceof Uint8Array)) return bytes;
-	var m = __umbrellaMarker, fixed = 0;
+	var m = __nc_m2b8, fixed = 0;
 	for (var i = bytes.indexOf(36); i !== -1; i = bytes.indexOf(36, i + 1)) {
 		var j = 0;
 		while (j < m.length && bytes[i + j] === m[j]) j++;
 		if (j !== m.length) continue;
 		var end = i + m.length;
-		while (end < bytes.length && __umbrellaIsIdent(bytes[end])) end++;
+		while (end < bytes.length && __nc_i5c4(bytes[end])) end++;
 		if (bytes[end] !== 40 || end - i < m.length + 2) continue;
-		for (var k = 0; k < __umbrellaGlueKeywords.length; k++) {
-			var kw = __umbrellaGlueKeywords[k], start = i - kw.length;
+		for (var k = 0; k < __nc_g3a1.length; k++) {
+			var kw = __nc_g3a1[k], start = i - kw.length;
 			if (start < 0) continue;
 			var ok = true;
 			for (var q = 0; q < kw.length; q++) if (bytes[start + q] !== kw[q]) { ok = false; break; }
-			if (!ok || (start > 0 && (__umbrellaIsIdent(bytes[start - 1]) || bytes[start - 1] === 46))) continue;
+			if (!ok || (start > 0 && (__nc_i5c4(bytes[start - 1]) || bytes[start - 1] === 46))) continue;
 			bytes.copyWithin(i + 1, i, end - 1);
 			bytes[i] = 32;
 			fixed++;
 			break;
 		}
 	}
-	if (fixed && self.__umbrellaDiag) self.__umbrellaDiag.glueFixes += fixed;
+	if (fixed && self.__nc_d7f2) self.__nc_d7f2.glueFixes += fixed;
 	return bytes;
 }
-function __umbrellaReportRewriteError(url, err) {
-	var d = self.__umbrellaDiag;
+function __nc_r7e2(url, err) {
+	var d = self.__nc_d7f2;
 	if (!d) return;
 	d.rewriteErrors++;
 	var msg = String(err && err.message || err).split("\\n")[0].slice(0, 300);
 	d.lastErrors.push({ url: String(url || "(inline)").slice(0, 500), message: msg, at: Date.now() });
 	if (d.lastErrors.length > 20) d.lastErrors.shift();
-	try { if (typeof self.__umbrellaRewriteErrorSink === "function") self.__umbrellaRewriteErrorSink(url, msg); } catch (e) {}
+	try { if (typeof self.__nc_s8f3 === "function") self.__nc_s8f3(url, msg); } catch (e) {}
 }
-if (!self.__umbrellaDiag) {
-	Object.defineProperty(self, "__umbrellaDiag", {
+if (!self.__nc_d7f2) {
+	Object.defineProperty(self, "__nc_d7f2", {
 		value: { rewriteErrors: 0, glueFixes: 0, lastErrors: [] },
 		enumerable: false, configurable: true, writable: true,
 	});
@@ -97,7 +93,8 @@ if (!self.__umbrellaDiag) {
 const EPILOGUE = `
 ;(function () {
 	try {
-		var g = self.$scramjet && self.$scramjet.defaultConfig && self.$scramjet.defaultConfig.globals;
+		var _c = self[atob("JHNjcmFtamV0")];
+		var g = _c && _c.defaultConfig && _c.defaultConfig.globals;
 		if (!g) return;
 		Object.keys(g).forEach(function (key) {
 			var name = g[key];
@@ -139,18 +136,18 @@ export const PATCHES = [
 		id: "keyword-glue",
 		why: "scramjet #185: `typeof(x).postMessage` and `return(x).postMessage` get rewritten to `typeof$scramjet$wrappostmessage(...)`, a ReferenceError that kills the whole script.",
 		find: "let{js:u,map:g,scramtag:d,errors:p}=n;",
-		replace: "let{js:u,map:g,scramtag:d,errors:p}=n;u=__umbrellaFixGlue(u);",
+		replace: "let{js:u,map:g,scramtag:d,errors:p}=n;u=__nc_f6d9(u);",
 	},
 	{
 		id: "rewrite-error-report",
 		why: "surface rewriter failures to the umbrella ui instead of only a console.warn that dumps the entire script source.",
 		find: 'catch(a){if(o.warn("failed rewriting js for",t||"(unknown)",a.message,"string"!=typeof e?(0,s.hS)(e):e)',
 		replace:
-			'catch(a){__umbrellaReportRewriteError(t,a);if(o.warn("failed rewriting js for",t||"(unknown)",a.message,("string"!=typeof e?(0,s.hS)(e):e).slice(0,400))',
+			'catch(a){__nc_r7e2(t,a);if(o.warn("failed rewriting js for",t||"(unknown)",a.message,("string"!=typeof e?(0,s.hS)(e):e).slice(0,400))',
 	},
 	{
 		id: "module-worker-imports",
-		why: "with encapsulateWorkers on (the default) a rewritten worker is moved into a data: url. for module workers that breaks every static import, because the rewriter emits root relative specifiers like /~/sj/... and a data: url has no base to resolve them against, so `new Worker(url, { type: \"module\" })` died on load for any worker with an import. module workers now skip the data: wrapper. modules are always strict, so the wrapper is not needed there.",
+		why: "with encapsulateWorkers on (the default) a rewritten worker is moved into a data: url. for module workers that breaks every static import, because the rewriter emits root relative specifiers and a data: url has no base to resolve them against, so `new Worker(url, { type: \"module\" })` died on load for any worker with an import. module workers now skip the data: wrapper. modules are always strict, so the wrapper is not needed there.",
 		find: '(h=(0,s.hS)(h)),(0,i.U5)("encapsulateWorkers",r,a.origin)){let e;',
 		replace: '(h=(0,s.hS)(h)),!A&&(0,i.U5)("encapsulateWorkers",r,a.origin)){let e;',
 	},
@@ -176,7 +173,7 @@ export const PATCHES = [
 	},
 	{
 		id: "media-src-readback",
-		why: "a player that does `audio.src = URL.createObjectURL(mediaSource)` got a blob url on the site's origin from the hooked createObjectURL, but reading audio.src back returned the real blob url on the proxy's origin, so `audio.src === url` was false. audio.currentSrc was not hooked at all and returned the /~/sj/ proxy url. players compare these to tell whether the element still belongs to them. both getters now return what the site set.",
+		why: "a player that does `audio.src = URL.createObjectURL(mediaSource)` got a blob url on the site's origin from the hooked createObjectURL, but reading audio.src back returned the real blob url on the proxy's origin, so `audio.src === url` was false. audio.currentSrc was not hooked at all and returned the rewritten proxy url. players compare these to tell whether the element still belongs to them. both getters now return what the site set.",
 		edits: [
 			{
 				find: '(0,n.pS)(i.prototype,t,{get(){return["src","data","href","action","formaction"].includes(t)?(0,l.v2)(r.get.call(this),e.context):r.get.call(this)}',

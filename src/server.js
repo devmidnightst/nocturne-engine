@@ -35,10 +35,10 @@ const PUBLIC = path.join(ROOT, "public");
 // ---------------------------------------------------------------------------
 
 const bundles = {
-	"/scramjet/scramjet.js": buildPatchedScramjet(),
-	"/controller/controller.inject.js": buildPatchedControllerInject(),
-	"/utils/scramjet-utils.js": buildPatchedUtils(),
-	"/transports/libcurl.mjs": buildPatchedLibcurl(),
+	"/assets/r/runtime.js": buildPatchedScramjet(),
+	"/assets/r/inject.js": buildPatchedControllerInject(),
+	"/assets/r/utils.js": buildPatchedUtils(),
+	"/assets/r/transport.mjs": buildPatchedLibcurl(),
 };
 for (const [route, b] of Object.entries(bundles)) {
 	b.etag = `"umbrella-${Buffer.from(route).toString("base64url")}-${b.applied.length}-${b.code.length}"`;
@@ -71,7 +71,7 @@ const domains = createDomainAllowlist(config.domains);
 app.use((req, res, next) => {
 	res.setHeader("X-Content-Type-Options", "nosniff");
 	res.setHeader("Referrer-Policy", "same-origin");
-	res.setHeader("X-Umbrella", SCRAMJET_VERSION);
+	res.setHeader("X-Powered", "1");
 	next();
 });
 
@@ -95,9 +95,21 @@ for (const [route, bundle] of Object.entries(bundles)) {
 		res.send(bundle.code);
 	});
 }
-app.use("/scramjet", express.static(DIST.scramjet, staticOpts));
-app.use("/controller", express.static(DIST.controller, staticOpts));
-app.get("/transports/epoxy.mjs", (req, res) => {
+app.get("/assets/r/core.wasm", (req, res) => {
+	assetHeaders(res, ".wasm");
+	res.sendFile(path.join(DIST.scramjet, "scramjet.wasm"));
+});
+app.get("/assets/r/api.js", (req, res) => {
+	assetHeaders(res, ".js");
+	res.sendFile(path.join(DIST.controller, "controller.api.js"));
+});
+app.get("/assets/r/sw.js", (req, res) => {
+	assetHeaders(res, ".js");
+	res.sendFile(path.join(DIST.controller, "controller.sw.js"));
+});
+app.use("/assets/r", express.static(DIST.scramjet, staticOpts));
+app.use("/assets/c", express.static(DIST.controller, staticOpts));
+app.get("/assets/r/transport.epoxy.mjs", (req, res) => {
 	assetHeaders(res, ".mjs");
 	res.sendFile(path.join(DIST.epoxy, "index.mjs"));
 });
@@ -116,8 +128,6 @@ app.get("/api/health", (req, res) => {
 	res.json({
 		ok: true,
 		name: config.brand.name,
-		scramjet: SCRAMJET_VERSION,
-		patches,
 		uptime: Math.round(process.uptime()),
 		pid: process.pid,
 	});
