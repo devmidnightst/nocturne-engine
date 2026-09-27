@@ -40,7 +40,7 @@ test("engine assets are served with the right types", async () => {
 test("patched bundles are what gets served", async () => {
 	for (const p of ["/scramjet/scramjet.js", "/controller/controller.inject.js", "/utils/scramjet-utils.js"]) {
 		const text = await (await get(p)).text();
-		assert.ok(text.startsWith("/* patched by nocturne engine:"), p);
+		assert.ok(text.startsWith("/* patched by umbrella:"), p);
 	}
 	const etag = (await get("/scramjet/scramjet.js")).headers.get("etag");
 	const again = await get("/scramjet/scramjet.js", { headers: { "if-none-match": etag } });
@@ -84,7 +84,7 @@ test("diagnose follows the wisp ip policy", async () => {
 	assert.equal(lan.kind, "blocked");
 	const smtp = await (await get("/api/diagnose?host=example.com&port=25")).json();
 	assert.equal(smtp.kind, "blocked");
-	const dns = await (await get("/api/diagnose?host=nocturne-nope.invalid&port=443")).json();
+	const dns = await (await get("/api/diagnose?host=umbrella-nope.invalid&port=443")).json();
 	assert.equal(dns.kind, "dns");
 	assert.equal((await get("/api/diagnose?host=&port=0")).status, 400);
 });

@@ -1,4 +1,4 @@
-// nocturne engine: runtime config, all from env vars so pm2 / systemd / docker
+// umbrella: runtime config, all from env vars so pm2 / systemd / docker
 // can set them without touching code. see .env.example for the full list.
 
 import fs from "node:fs";
@@ -66,6 +66,6 @@ export const config = {
 	},
 
 	brand: {
-		name: env.BRAND_NAME || "Nocturne Engine",
+		name: env.BRAND_NAME || "Umbrella",
 	},
 };

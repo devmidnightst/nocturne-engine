@@ -1,7 +1,7 @@
 {
-  "name": "nocturne-engine",
+  "name": "umbrella",
   "version": "1.0.0",
-  "description": "Nocturne Engine: a Scramjet 2.x web proxy with a hardened rewriter layer, a glass UI and a PM2 ready Node server.",
+  "description": "Umbrella: a Scramjet 2.x web proxy with a hardened rewriter layer, a plain UI and a PM2 ready Node server.",
   "private": true,
   "type": "module",
   "license": "AGPL-3.0-only",

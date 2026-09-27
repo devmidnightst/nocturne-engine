@@ -1,16 +1,16 @@
-// nocturne engine end to end suite.
+// umbrella end to end suite.
 //
 //   npm run test:e2e
 //
-// boots the nocturne server and a local fixture site, drives a real chromium
+// boots the umbrella server and a local fixture site, drives a real chromium
 // through the proxy and checks that the rewriter handled everything on the
 // fixture page (see test/fixture/site/checks.js). runs once per transport.
 //
 // env:
 //   CHROME_PATH                 chromium binary (defaults to playwright's lookup)
-//   NOCTURNE_E2E_EXTRA_CA       pem bundle to trust inside epoxy, for networks that
+//   UMBRELLA_E2E_EXTRA_CA       pem bundle to trust inside epoxy, for networks that
 //                               re-sign tls (corporate proxies, ci sandboxes)
-//   NOCTURNE_E2E_URLS           comma separated real urls to smoke test as well
+//   UMBRELLA_E2E_URLS           comma separated real urls to smoke test as well
 
 import fs from "node:fs";
 
@@ -24,9 +24,9 @@ const { startFixture } = await import("../test/fixture/server.js");
 
 const fixture = await startFixture(0);
 const fixtureUrl = `http://127.0.0.1:${fixture.address().port}/`;
-const nocturne = createServer();
-await new Promise((r) => nocturne.listen(0, "127.0.0.1", r));
-const base = `http://127.0.0.1:${nocturne.address().port}`;
+const umbrella = createServer();
+await new Promise((r) => umbrella.listen(0, "127.0.0.1", r));
+const base = `http://127.0.0.1:${umbrella.address().port}`;
 
 const browser = await chromium.launch({
 	executablePath: process.env.CHROME_PATH || (fs.existsSync("/opt/pw-browsers/chromium-1194/chrome-linux/chrome") ? "/opt/pw-browsers/chromium-1194/chrome-linux/chrome" : undefined),
@@ -44,9 +44,9 @@ const fail = (m) => {
 async function newShell(transport) {
 	const context = await browser.newContext();
 	await context.addInitScript((t) => {
-		localStorage.setItem("nocturne:settings", JSON.stringify({ transport: t, blockAds: true }));
+		localStorage.setItem("umbrella:settings", JSON.stringify({ transport: t, blockAds: true }));
 	}, transport);
-	const extraCa = process.env.NOCTURNE_E2E_EXTRA_CA;
+	const extraCa = process.env.UMBRELLA_E2E_EXTRA_CA || process.env.NOCTURNE_E2E_EXTRA_CA;
 	if (extraCa) {
 		const pem = fs.readFileSync(extraCa, "utf8");
 		await context.route("**/transports/epoxy.mjs", async (route) => {
@@ -137,7 +137,7 @@ async function runMedia(transport) {
 
 // a single websocket message sent after a quiet spell has to reach the server
 // on its own. epoxy 3.0.1 held it back until something else was written, which
-// is why nocturne routes websockets through libcurl when epoxy is selected.
+// is why umbrella routes websockets through libcurl when epoxy is selected.
 async function runLoneSend(transport) {
 	const { context, page } = await newShell(transport);
 	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "ws-lone.html")}`);
@@ -210,7 +210,7 @@ async function runAbandoned(transport) {
 async function runErrorPage() {
 	console.log("\nerror pages");
 	const { context, page } = await newShell("epoxy");
-	await page.goto(`${base}/?go=${encodeURIComponent("http://nocturne-does-not-exist.invalid/")}`);
+	await page.goto(`${base}/?go=${encodeURIComponent("http://umbrella-does-not-exist.invalid/")}`);
 	try {
 		await page.waitForFunction(
 			() => document.getElementById("frame").contentDocument?.title?.includes("Umbrella"),
@@ -218,9 +218,9 @@ async function runErrorPage() {
 			{ timeout: 30_000 }
 		);
 		const title = await proxyFrame(page).title();
-		pass(`unknown host shows a nocturne error page ("${title}")`);
+		pass(`unknown host shows an umbrella error page ("${title}")`);
 	} catch {
-		fail("unknown host did not show the nocturne error page");
+		fail("unknown host did not show the umbrella error page");
 	}
 	await context.close();
 }
@@ -240,7 +240,7 @@ async function runBlocker() {
 }
 
 async function runRealSites() {
-	const urls = (process.env.NOCTURNE_E2E_URLS || "").split(",").map((s) => s.trim()).filter(Boolean);
+	const urls = (process.env.UMBRELLA_E2E_URLS || process.env.NOCTURNE_E2E_URLS || "").split(",").map((s) => s.trim()).filter(Boolean);
 	if (!urls.length) return;
 	console.log("\nreal site smoke tests");
 	for (const url of urls) {
@@ -280,7 +280,7 @@ try {
 	await runRealSites();
 } finally {
 	await browser.close();
-	nocturne.close();
+	umbrella.close();
 	fixture.close();
 }
 

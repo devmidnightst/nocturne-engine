@@ -113,7 +113,7 @@ function qrGateway(ws, req) {
 			setTimeout(() => {
 				const ticket = crypto.randomBytes(8).toString("hex");
 				qrSessions.set(ticket, { key, ticket });
-				ws.send(JSON.stringify({ op: "pending_ticket", encrypted_user_payload: qrEncrypt(key, "1:0:0:nocturne") }));
+				ws.send(JSON.stringify({ op: "pending_ticket", encrypted_user_payload: qrEncrypt(key, "1:0:0:umbrella") }));
 				ws.send(JSON.stringify({ op: "pending_login", ticket }));
 				ws.close(1000, "");
 			}, 300);
@@ -140,7 +140,7 @@ export function startFixture(port = 0) {
 			);
 		}
 		if (url.pathname === "/api/setcookie") {
-			res.writeHead(200, { "content-type": "text/plain", "set-cookie": "nocturne_test=yes; Path=/" });
+			res.writeHead(200, { "content-type": "text/plain", "set-cookie": "umbrella_test=yes; Path=/" });
 			return res.end("ok");
 		}
 		if (url.pathname === "/api/blob") {

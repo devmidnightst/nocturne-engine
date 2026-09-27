@@ -1,6 +1,3 @@
-// nocturne engine: shell ui. owns the omnibox, panels and recovery banner,
-// and drives the engine from engine.js.
-
 import { createEngine, versionInfo } from "./engine.js";
 import { resolveInput } from "./omnibox.js";
 import { settings, bookmarks, history, SEARCH_ENGINES, defaultWispUrl } from "./store.js";
@@ -36,10 +33,6 @@ let engine = null;
 let currentUrl = "";
 let currentTitle = "";
 let pendingGo = null;
-
-// ---------------------------------------------------------------------------
-// small helpers
-// ---------------------------------------------------------------------------
 
 let toastTimer;
 function toast(msg, ms = 2600) {
@@ -77,14 +70,9 @@ function originOf(url) {
 }
 
 function favicon(url) {
-	// first letter badge, avoids leaking every visited host to a favicon service
 	const letter = (hostOf(url)[0] || "?").toUpperCase();
 	return el("span", { class: "fav" }, letter);
 }
-
-// ---------------------------------------------------------------------------
-// view state
-// ---------------------------------------------------------------------------
 
 function showHome() {
 	currentUrl = "";
@@ -99,7 +87,6 @@ function showHome() {
 	try {
 		ui.frame.src = "about:blank";
 	} catch {
-		// ignore
 	}
 	history_replace(null);
 	$("hero-input").focus({ preventScroll: true });
@@ -114,12 +101,10 @@ let loadingTimer;
 function setLoading(on) {
 	ui.progress.classList.toggle("active", on);
 	clearTimeout(loadingTimer);
-	// never leave the bar spinning forever if a load event gets lost
 	if (on) loadingTimer = setTimeout(() => ui.progress.classList.remove("active"), 30_000);
 }
 
 function history_replace(url) {
-	// mirror the proxied url into ?go= so a refresh or shared link reopens it
 	const next = url ? `/?go=${encodeURIComponent(url)}` : "/";
 	if (location.pathname + location.search !== next) window.history.replaceState(null, "", next);
 }
@@ -145,10 +130,6 @@ function updateBookmarkButton() {
 	ui.bookmark.disabled = !currentUrl;
 }
 
-// ---------------------------------------------------------------------------
-// engine events
-// ---------------------------------------------------------------------------
-
 const engineEvents = {
 	onUrl(url) {
 		if (!url || url === "about:blank") return;
@@ -165,7 +146,6 @@ const engineEvents = {
 	},
 	onLoading: setLoading,
 	onError(info) {
-		// subresource failures are normal noise, only surface navigations
 		if (info.destination === "document" || info.destination === "iframe") setLoading(false);
 	},
 	onHealth(info) {
@@ -183,10 +163,6 @@ const engineEvents = {
 		renderDiag();
 	},
 };
-
-// ---------------------------------------------------------------------------
-// recovery banner
-// ---------------------------------------------------------------------------
 
 let bannerOrigin = null;
 function showBanner(title, detail, origin) {
@@ -239,19 +215,14 @@ async function switchTransport() {
 	}
 }
 
-// messages from nocturne error pages inside the frame
 window.addEventListener("message", async (e) => {
-	if (e.origin !== location.origin || !e.data || typeof e.data.__nocturne !== "string") return;
-	if (e.data.__nocturne === "home") showHome();
-	if (e.data.__nocturne === "switch-transport") {
+	if (e.origin !== location.origin || !e.data || typeof e.data.__umbrella !== "string") return;
+	if (e.data.__umbrella === "home") showHome();
+	if (e.data.__umbrella === "switch-transport") {
 		await switchTransport();
 		engine.reload();
 	}
 });
-
-// ---------------------------------------------------------------------------
-// home screen
-// ---------------------------------------------------------------------------
 
 function renderQuick() {
 	const wrap = $("quick");
@@ -284,10 +255,6 @@ function renderHomeLists() {
 	$("bookmarks-card").hidden = list.length === 0;
 	$("bookmarks-list").replaceChildren(...list.slice(0, 12).map((b) => linkItem(b)));
 }
-
-// ---------------------------------------------------------------------------
-// panel
-// ---------------------------------------------------------------------------
 
 function openPanel(tab = "settings") {
 	ui.panel.hidden = false;
@@ -435,10 +402,6 @@ $("clear-data").addEventListener("click", async () => {
 });
 $("about-link").addEventListener("click", () => openPanel("about"));
 
-// ---------------------------------------------------------------------------
-// bar
-// ---------------------------------------------------------------------------
-
 ui.omnibox.addEventListener("submit", (e) => {
 	e.preventDefault();
 	navigate(ui.address.value);
@@ -479,10 +442,6 @@ document.addEventListener("keydown", (e) => {
 	}
 });
 
-// ---------------------------------------------------------------------------
-// boot
-// ---------------------------------------------------------------------------
-
 async function boot() {
 	renderQuick();
 	renderHomeLists();
@@ -493,7 +452,7 @@ async function boot() {
 	try {
 		engine = await createEngine(ui.frame, engineEvents, (s) => (ui.bootStatus.textContent = s));
 	} catch (err) {
-		console.error("[nocturne] boot failed", err);
+		console.error("[umbrella] boot failed", err);
 		ui.bootStatus.textContent = `couldn't start the engine: ${err.message}`;
 		ui.boot.classList.add("failed");
 		return;

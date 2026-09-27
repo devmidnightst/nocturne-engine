@@ -9,9 +9,8 @@
 		<meta name="description" content="Umbrella, a fast Scramjet powered web proxy." />
 		<title>Umbrella</title>
 		<link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
-		<link rel="stylesheet" href="/css/nocturne.css" />
+		<link rel="stylesheet" href="/css/umbrella.css" />
 
-		<!-- scramjet runtime + controller + utils. order matters: each one reads the globals of the one before -->
 		<script src="/scramjet/scramjet.js"></script>
 		<script src="/controller/controller.api.js"></script>
 		<script src="/utils/scramjet-utils.js"></script>
@@ -61,7 +60,6 @@
 			</div>
 		</header>
 
-		<!-- recovery banner: shown when a page loads blank with js errors -->
 		<div class="banner" id="banner" hidden>
 			<div class="banner-text">
 				<strong id="banner-title">this page might be broken</strong>
@@ -115,7 +113,6 @@
 			</div>
 		</main>
 
-		<!-- slide over panel: settings, history, bookmarks, about -->
 		<aside class="panel" id="panel" hidden aria-label="menu">
 			<nav class="tabs" role="tablist">
 				<button role="tab" data-tab="settings" class="active">settings</button>

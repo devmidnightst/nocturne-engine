@@ -1,22 +1,10 @@
-// nocturne engine: scramjet 2.x wiring.
-//
-// load order (see index.html): scramjet.js -> controller.api.js -> scramjet-utils.js
-// are classic scripts that define $scramjet, $scramjetController and
-// $scramjetUtils. this module runs after them.
-//
-// how a proxied request flows in scramjet 2.x:
-//   iframe page -> service worker (sw.js) -> MessageChannel -> Controller (this page)
-//   -> ScramjetFetchHandler rewrites the request -> transport (epoxy or libcurl)
-//   -> wisp websocket -> nocturne server -> the real site
-// so the transport and the rewriter both live here, not in the service worker.
-
 import { settings, wispUrl } from "./store.js";
 import {
 	ErrorPagePlugin,
 	ContentBlockerPlugin,
 	RecoveryPlugin,
 	ShellBridgePlugin,
-} from "./plugins/nocturne-plugins.js";
+} from "./plugins/umbrella-plugins.js";
 
 const { Controller } = globalThis.$scramjetController;
 const { defaultConfig, versionInfo } = globalThis.$scramjet;
@@ -24,8 +12,6 @@ const { HttpCachePlugin, UrlWatcherPlugin, CatchEscapedLinksPlugin } = globalThi
 
 export { versionInfo };
 
-// these must match where server.js serves the files. they are also scramjet's
-// defaults, spelled out so moving a file only means changing it here.
 const CONTROLLER_CONFIG = {
 	prefix: "/~/sj/",
 	scramjetPath: "/scramjet/scramjet.js",
@@ -34,12 +20,9 @@ const CONTROLLER_CONFIG = {
 	virtualWasmPath: "scramjet.wasm.js",
 };
 
-// rewriter features that compat mode turns off for a single site. these are the
-// two most involved rewrites, so they are the first suspects when a site breaks.
 export const COMPAT_FLAGS = { destructureRewrites: false, encapsulateWorkers: false };
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
-// siteFlags keys are regex sources tested against the page url
 const siteFlagKey = (origin) => `^${escapeRegex(origin)}(/|$)`;
 
 function buildScramjetConfig() {
@@ -49,12 +32,8 @@ function buildScramjetConfig() {
 	return {
 		flags: {
 			...defaultConfig.flags,
-			// keep broken js running untouched instead of throwing (scramjet default, stated for clarity)
 			allowInvalidJs: true,
-			// a failed api intercept logs instead of killing the page
 			allowFailedIntercepts: true,
-			// source maps make Function.prototype.toString return the original code,
-			// which a lot of feature detection and anti tamper code relies on
 			sourcemaps: true,
 			rewriterLogs: !!s.rewriterLogs,
 		},
@@ -64,23 +43,11 @@ function buildScramjetConfig() {
 
 async function createLibcurl(url) {
 	const { LibcurlClient } = await import("/transports/libcurl.mjs");
-	// [total, idle cache, per host]. libcurl's default is 50 / 40 / 6. single page
-	// apps hold a few long lived requests to their own host for as long as they
-	// run, so leave more room per host than a browser's 6.
 	const transport = new LibcurlClient({ wisp: url, connections: [80, 40, 16] });
 	await transport.init();
 	return transport;
 }
 
-// epoxy 3.0.1 holds every websocket frame the page sends until the next one is
-// sent (the last frame never leaves the browser). a chat app that sends one
-// message and waits for the answer just hangs: discord's IDENTIFY sits there
-// until the next heartbeat, and each heartbeat only goes out with the one after
-// it, so the gateway never sees a timely heartbeat. so when epoxy is picked, its
-// websockets are handed to libcurl, which sends immediately. (epoxy's http also
-// hangs after a site closes an idle keep alive connection, which is why libcurl
-// is the default, see store.js.)
-// libcurl loads the first time a page opens a socket, or when the browser is idle.
 function epoxyWithLibcurlSockets(epoxy, url) {
 	let libcurl = null;
 	const getLibcurl = () => (libcurl ??= createLibcurl(url).catch((err) => ((libcurl = null), Promise.reject(err))));
@@ -116,13 +83,6 @@ function epoxyWithLibcurlSockets(epoxy, url) {
 	};
 }
 
-// scramjet 2.x never tells the transport when a request is abandoned (the
-// controller passes no abort signal), so a page's long polls, event streams and
-// requests to hosts that never answer keep running after you leave it. libcurl
-// allows 6 connections per host, so six of those wedged every later request to
-// that site until they timed out (the soak test caught tabs frozen for minutes).
-// this tracks every request until its body is done, and the shell aborts the
-// lot when the top level page unloads, the way a browser would.
 function withAbortableRequests(transport) {
 	const inflight = new Set();
 	const request = transport.request.bind(transport);
@@ -169,12 +129,10 @@ async function createTransport(kind = settings.get().transport) {
 	} else {
 		const { default: EpoxyTransport } = await import("/transports/epoxy.mjs");
 		const epoxy = new EpoxyTransport({ wisp: url });
-		// init up front: the controller calls transport.connect() directly for
-		// websockets, and that path does not lazily init like fetch does
 		await epoxy.init();
 		transport = epoxyWithLibcurlSockets(epoxy, url);
 	}
-	transport.nocturneKind = kind;
+	transport.umbrellaKind = kind;
 	return withAbortableRequests(transport);
 }
 
@@ -202,10 +160,6 @@ async function registerServiceWorker(onStatus) {
 	return sw;
 }
 
-/**
- * boots the engine. returns an object the ui drives.
- * events: { onUrl, onTitle, onLoading, onError, onHealth, onRewriteError, onEscapedNavigation }
- */
 export async function createEngine(iframe, events = {}, onStatus) {
 	const sw = await registerServiceWorker(onStatus);
 
@@ -221,9 +175,7 @@ export async function createEngine(iframe, events = {}, onStatus) {
 	});
 	await controller.wait();
 
-	// rewriter failures for scripts the controller fetched (external files) are
-	// reported in this realm, since that is where the rewrite runs
-	self.__nocturneRewriteErrorSink = (url, message) =>
+	self.__umbrellaRewriteErrorSink = (url, message) =>
 		events.onRewriteError?.({ url, message, top: true });
 
 	const blocker = new ContentBlockerPlugin(() => settings.get().blockAds);
@@ -231,7 +183,6 @@ export async function createEngine(iframe, events = {}, onStatus) {
 	const plugins = [
 		cache,
 		new UrlWatcherPlugin((url) => events.onUrl?.(url)),
-		// window.open and target=_top links would otherwise leave the proxy shell
 		new CatchEscapedLinksPlugin((url) => new URL(`/?go=${encodeURIComponent(url.href)}`, location.origin)),
 		blocker,
 		new ErrorPagePlugin((info) => events.onError?.(info)),
@@ -242,7 +193,6 @@ export async function createEngine(iframe, events = {}, onStatus) {
 		new ShellBridgePlugin({
 			onNavigateStart: () => events.onLoading?.(true),
 			onUnloading: () => {
-				// the page is going away, so is everything it was still loading
 				transport.abortInFlight?.();
 				events.onLoading?.(true);
 			},
@@ -253,10 +203,6 @@ export async function createEngine(iframe, events = {}, onStatus) {
 	const frame = controller.createFrame(iframe, { plugins });
 	iframe.addEventListener("load", () => events.onLoading?.(false));
 
-	// keep the live config in sync with settings without a reload. the fetch
-	// handler holds a reference to controller.scramjetConfig, and every new page
-	// gets a fresh copy serialized into its inject script, so mutating it in
-	// place applies from the next navigation on.
 	function syncConfig() {
 		const next = buildScramjetConfig();
 		controller.scramjetConfig.flags.rewriterLogs = next.flags.rewriterLogs;
@@ -274,7 +220,7 @@ export async function createEngine(iframe, events = {}, onStatus) {
 		cache,
 		blocker,
 		get transportKind() {
-			return transport.nocturneKind;
+			return transport.umbrellaKind;
 		},
 		go(url) {
 			events.onLoading?.(true);
@@ -288,8 +234,6 @@ export async function createEngine(iframe, events = {}, onStatus) {
 		},
 		async setTransport(kind) {
 			const next = await createTransport(kind);
-			// requests already in flight finish on the old transport, it gets
-			// garbage collected after that
 			controller.setTransport(next);
 			transport = next;
 			settings.set({ transport: kind });
@@ -304,7 +248,7 @@ export async function createEngine(iframe, events = {}, onStatus) {
 			return settings.get().compatSites.includes(origin);
 		},
 		diag() {
-			return self.__nocturneDiag;
+			return self.__umbrellaDiag;
 		},
 		async clearData() {
 			await cache.bust();
@@ -314,13 +258,11 @@ export async function createEngine(iframe, events = {}, onStatus) {
 				const req = indexedDB.deleteDatabase("__scramjet_controller");
 				req.onsuccess = req.onerror = req.onblocked = () => resolve();
 			});
-			// proxied sites' localStorage lives in ours, keep only nocturne's own keys
 			try {
 				for (const key of Object.keys(localStorage)) {
-					if (!key.startsWith("nocturne:")) localStorage.removeItem(key);
+					if (!key.startsWith("umbrella:")) localStorage.removeItem(key);
 				}
 			} catch {
-				// storage blocked
 			}
 		},
 	};
