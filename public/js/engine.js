@@ -238,11 +238,26 @@ async function registerServiceWorker(onStatus) {
 	}
 	const sw = navigator.serviceWorker.controller ?? reg.active;
 	if (!sw) throw new Error("service worker never became active");
-	return sw;
+	return { sw, reg };
+}
+
+function followServiceWorker(controller, reg) {
+	const rebind = (worker) => {
+		if (!worker || worker === controller.serviceWorkerController) return;
+		controller.serviceWorkerController = worker;
+		controller.setupMessagePort();
+	};
+	navigator.serviceWorker.addEventListener("controllerchange", () => rebind(navigator.serviceWorker.controller));
+	reg.addEventListener("updatefound", () => {
+		const next = reg.installing;
+		next?.addEventListener("statechange", () => {
+			if (next.state === "activated") rebind(next);
+		});
+	});
 }
 
 export async function createEngine(events = {}, onStatus) {
-	const sw = await registerServiceWorker(onStatus);
+	const { sw, reg } = await registerServiceWorker(onStatus);
 
 	onStatus?.("starting transport");
 	let transport = await createTransport();
@@ -255,6 +270,7 @@ export async function createEngine(events = {}, onStatus) {
 		scramjetConfig: buildScramjetConfig(),
 	});
 	await controller.wait();
+	followServiceWorker(controller, reg);
 
 	self.__umbrellaRewriteErrorSink = (url, message) =>
 		events.onRewriteError?.({ url, message, top: true });
