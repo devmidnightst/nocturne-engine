@@ -215,6 +215,24 @@ svg {
 	animation: load 1.4s ease-in-out infinite;
 }
 
+@keyframes fadeUp {
+	from { opacity: 0; transform: translateY(10px); }
+	to   { opacity: 1; transform: translateY(0); }
+}
+
+.home:not([hidden]) {
+	animation: fadeUp 0.28s ease both;
+}
+
+.hero h1,
+.hero-search {
+	animation: fadeUp 0.32s ease both;
+}
+
+.hero-search {
+	animation-delay: 0.06s;
+}
+
 @keyframes load {
 	from {
 		left: 0;
@@ -660,7 +678,9 @@ body.collapsed.peek .sidebar {
 }
 
 .credit {
-	display: inline-block;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
 	margin-top: 28px;
 	padding: 10px 18px;
 	border: 1px solid var(--line);
@@ -669,6 +689,7 @@ body.collapsed.peek .sidebar {
 	color: var(--text);
 	font-size: 15px;
 	text-decoration: none;
+	transition: background 0.15s ease;
 }
 
 .credit:hover {
@@ -1062,7 +1083,9 @@ body.collapsed.peek .sidebar {
 }
 
 .boot.done {
-	display: none;
+	opacity: 0;
+	pointer-events: none;
+	transition: opacity 0.25s ease;
 }
 
 .boot.failed p {
