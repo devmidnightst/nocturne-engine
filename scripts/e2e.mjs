@@ -267,6 +267,42 @@ async function runShell() {
 		const restored = await page.inputValue("#address");
 		restored === fixtureUrl + "child.html?after-sw-stop" ? pass("reloading the tab reopens the current site") : fail(`reload opened ${restored}`);
 
+		// a deploy that changes sw.js installs a new worker while the shell stays
+		// open. the controller kept posting to the old, dead worker, so every
+		// proxied page fell through to the server's 404 until a reload.
+		// playwright can't route the worker script, so change the file on disk
+		// for a moment, the way a git pull would.
+		const swPath = new URL("../public/sw.js", import.meta.url);
+		const swSource = fs.readFileSync(swPath, "utf8");
+		try {
+			fs.writeFileSync(swPath, `${swSource}\n// deploy ${Date.now()}\n`);
+			const swapped = await page.evaluate(async () => {
+				const changed = new Promise((r) => navigator.serviceWorker.addEventListener("controllerchange", () => r(true), { once: true }));
+				const reg = await navigator.serviceWorker.getRegistration("/");
+				await reg.update();
+				return Promise.race([changed, new Promise((r) => setTimeout(() => r(false), 10_000))]);
+			});
+			if (!swapped) fail("the updated service worker never took over");
+			await page.waitForTimeout(500);
+		} finally {
+			fs.writeFileSync(swPath, swSource);
+		}
+		await go(fixtureUrl + "child.html?after-sw-update");
+		const updated = await page
+			.waitForFunction(
+				() => {
+					const f = document.getElementById("frame");
+					if (!f?.contentWindow?.location.href.includes("after-sw-update")) return null;
+					const text = f.contentDocument?.body?.innerText;
+					return text ? text.trim() : null;
+				},
+				null,
+				{ timeout: 20_000 }
+			)
+			.then((h) => h.jsonValue())
+			.catch(() => "timed out");
+		updated === "child" ? pass("browsing keeps working after a new service worker is deployed") : fail(`after a service worker update the page showed: ${updated.slice(0, 60)}`);
+
 		await page.evaluate(() => (document.getElementById("frame").src = "/"));
 		await page.waitForTimeout(3000);
 		const nested = await page.evaluate(() => !!document.getElementById("frame")?.contentDocument?.getElementById("address"));

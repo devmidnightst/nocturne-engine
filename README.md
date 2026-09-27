@@ -205,7 +205,7 @@ umbrella's own, in `public/js/plugins/umbrella-plugins.js`:
 - `ctrl+l` focuses the omnibox, `alt+t` opens a tab, `alt+w` closes one, `esc` closes panels.
 - mobile: under 640px the sidebar becomes a drawer behind the tab count button and the panel becomes a bottom sheet.
 - links like `/?go=https://example.com` open straight into the proxy as a new tab. the browser's address bar always stays on the bare site (`/`).
-- `public/sw.js` waits for the shell to re-register when chrome restarts an idle service worker, instead of letting the navigation fall through to the server's 404 page.
+- `public/sw.js` waits for the shell to re-register when chrome restarts an idle service worker, instead of letting the navigation fall through to the server's 404 page. when a deploy ships a new `sw.js`, the open shell follows the new worker, since scramjet's controller would otherwise keep talking to the old dead one and every proxied page would hit that 404.
 
 ## testing
 
