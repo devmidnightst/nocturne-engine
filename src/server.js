@@ -145,9 +145,18 @@ app.get("/api/tls-ask", (req, res) => {
 
 // ---- shell ----
 
+// cloaking: browsers re-fetch with x-nf-raw: 1 to get the real shell.
+// scrapers that only parse the initial html see the disguise page.
+const _shellHtml = path.join(PUBLIC, "_shell.html");
+app.get("/", (req, res) => {
+	res.setHeader("Cache-Control", "no-cache");
+	if (req.headers["x-nf-raw"] === "1") return res.sendFile(_shellHtml);
+	res.sendFile(path.join(PUBLIC, "index.html"));
+});
+
 app.use(
 	express.static(PUBLIC, {
-		index: "index.html",
+		index: false,
 		setHeaders(res, file) {
 			if (file.endsWith(".html")) res.setHeader("Cache-Control", "no-cache");
 			else res.setHeader("Cache-Control", "public, max-age=600");
