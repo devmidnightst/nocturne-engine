@@ -323,15 +323,25 @@ function openTab(url, { opener = null, background = false } = {}) {
 function closeTab(tab) {
 	const i = tabs.indexOf(tab);
 	if (i === -1) return;
-	tab.handle?.destroy();
-	tabs.splice(i, 1);
-	if (!tabs.length) tabs.push(makeTab());
-	if (tab === active) {
-		active = null;
-		activate(tabs.find((t) => t.id === tab.openerId) ?? tabs[Math.min(i, tabs.length - 1)]);
+	const row = ui.tabList.querySelector(`[data-id="${tab.id}"]`);
+	const finish = () => {
+		tab.handle?.destroy();
+		tab.iframe?.remove();
+		tabs.splice(tabs.indexOf(tab), 1);
+		if (!tabs.length) tabs.push(makeTab());
+		if (tab === active) {
+			active = null;
+			activate(tabs.find((t) => t.id === tab.openerId) ?? tabs[Math.min(i, tabs.length - 1)]);
+		} else {
+			scheduleRender();
+			saveSession();
+		}
+	};
+	if (row) {
+		row.classList.add("closing");
+		row.addEventListener("animationend", finish, { once: true });
 	} else {
-		scheduleRender();
-		saveSession();
+		finish();
 	}
 }
 
