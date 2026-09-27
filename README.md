@@ -265,4 +265,11 @@ see [docs/DISCORD.md](docs/DISCORD.md). short version: the patches fix the proxy
 
 ## license
 
-scramjet, the controller, scramjet-utils and both transports are AGPL-3.0, so umbrella is AGPL-3.0 too. if you run a modified version for other people, you have to offer them the source. a link to your repo in the about panel (`public/index.html`) covers it.
+umbrella is AGPL-3.0 (`LICENSE`) with extra terms in `NOTICE`, added under section 7 of the license. in short, if you fork it, host it or rebrand it:
+
+- keep the "Umbrella by midnight" credit box on the home page, linked to this repo, readable and visible without scrolling. a renamed fork says "based on Umbrella by midnight".
+- keep the same credit in the about panel and keep `NOTICE` with the source.
+- don't pass a modified version off as the original.
+- like any AGPL program, if you run a modified version for other people, you have to offer them its source.
+
+scramjet, the controller, scramjet-utils and both transports are AGPL-3.0 by Mercury Workshop and keep their own licenses. the extra terms only cover umbrella's own code.

@@ -659,6 +659,22 @@ body.collapsed.peek .sidebar {
 	background: var(--hover);
 }
 
+.credit {
+	display: inline-block;
+	margin-top: 28px;
+	padding: 10px 18px;
+	border: 1px solid var(--line);
+	border-radius: var(--radius);
+	background: var(--surface);
+	color: var(--text);
+	font-size: 15px;
+	text-decoration: none;
+}
+
+.credit:hover {
+	background: var(--hover);
+}
+
 .about {
 	margin-top: auto;
 	padding-top: 24px;
