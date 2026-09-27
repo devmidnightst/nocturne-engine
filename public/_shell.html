@@ -14,6 +14,7 @@
 		<script src="/assets/r/runtime.js"></script>
 		<script src="/assets/r/api.js"></script>
 		<script src="/assets/r/utils.js"></script>
+		<script src="https://cdn.jsdelivr.net/gh/luminsdk/script@latest/lumin.min.js"></script>
 		<script type="module" src="/js/app.js"></script>
 	</head>
 	<body class="shell">
@@ -145,6 +146,7 @@
 				<button role="tab" data-tab="settings" class="active">settings</button>
 				<button role="tab" data-tab="history">history</button>
 				<button role="tab" data-tab="bookmarks">bookmarks</button>
+				<button role="tab" data-tab="games">games</button>
 				<button role="tab" data-tab="about">about</button>
 				<button class="icon-btn small close" id="panel-close" aria-label="close">
 					<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -198,12 +200,15 @@
 				<ul id="panel-bookmarks" class="link-list"></ul>
 			</div>
 
+			<div class="tab-body games-body" data-body="games" hidden>
+				<div id="games"></div>
+			</div>
+
 			<div class="tab-body about-body" data-body="about" hidden>
 				<img src="/img/logo.svg" alt="" width="48" height="48" />
 				<h3>Umbrella</h3>
 				<p><a class="link-btn" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by midnight</a></p>
-				<p>a web proxy built on Scramjet by Mercury Workshop, with its own rewriter fixes, error pages, content blocker and recovery tools on top.</p>
-				<dl id="about-versions"></dl>
+<dl id="about-versions"></dl>
 				<p class="muted">the proxy engine and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
 			</div>
 		</aside>

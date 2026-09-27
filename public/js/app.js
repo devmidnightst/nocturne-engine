@@ -251,7 +251,7 @@ function syncChrome() {
 	const url = active?.url ?? "";
 	if (document.activeElement !== ui.address) ui.address.value = url;
 	ui.mobileUrl.textContent = url ? hostOf(url) : "search or type a url";
-	document.title = active?.url && active.title ? `${active.title} | Umbrella` : "Umbrella";
+	document.title = "Umbrella";
 	setLoading(!!active?.loading);
 	updateBookmarkButton();
 	for (const id of ["back", "forward", "reload"]) $(id).disabled = !active?.handle || !url;
@@ -383,7 +383,6 @@ function tabEvents(tab) {
 		onTitle(title) {
 			tab.title = title || "";
 			if (tab.url) history.setTitle(tab.url, tab.title);
-			if (tab === active) document.title = tab.title ? `${tab.title} | Umbrella` : "Umbrella";
 			scheduleRender();
 			saveSession();
 		},
@@ -604,6 +603,15 @@ function selectTab(tab) {
 	if (tab === "bookmarks") renderPanelBookmarks();
 	if (tab === "settings") renderSettings();
 	if (tab === "about") renderAbout();
+	if (tab === "games") initGames();
+}
+
+let gamesReady = false;
+function initGames() {
+	if (gamesReady) return;
+	if (typeof Lumin === "undefined") return;
+	Lumin.init({ container: "#games", theme: "dark" });
+	gamesReady = true;
 }
 
 ui.panel.querySelector(".tabs").addEventListener("click", (e) => {
