@@ -603,6 +603,15 @@ function selectTab(tab) {
 	if (tab === "bookmarks") renderPanelBookmarks();
 	if (tab === "settings") renderSettings();
 	if (tab === "about") renderAbout();
+	if (tab === "games") initGames();
+}
+
+let gamesReady = false;
+function initGames() {
+	if (gamesReady) return;
+	if (typeof Lumin === "undefined") return;
+	Lumin.init({ container: "#games", theme: "dark" });
+	gamesReady = true;
 }
 
 ui.panel.querySelector(".tabs").addEventListener("click", (e) => {
