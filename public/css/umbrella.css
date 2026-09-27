@@ -388,6 +388,7 @@ svg {
 	cursor: default;
 	user-select: none;
 	-webkit-user-select: none;
+	transition: background 0.12s ease, border-color 0.12s ease;
 }
 
 .tab-row:hover {
@@ -422,6 +423,10 @@ svg {
 	text-overflow: ellipsis;
 }
 
+.tab-title {
+	transition: color 0.12s ease;
+}
+
 .tab-row:not(.active) .tab-title {
 	color: var(--muted);
 }
@@ -454,6 +459,10 @@ svg {
 .tab-row.active .tab-close,
 .tab-close:focus-visible {
 	opacity: 1;
+}
+
+.tab-close {
+	transition: opacity 0.12s ease, background 0.12s ease;
 }
 
 .tab-close:hover {
@@ -593,13 +602,14 @@ body.collapsed.peek .sidebar {
 	border: 0;
 	display: block;
 	background: #fff;
-	visibility: hidden;
+	opacity: 0;
 	pointer-events: none;
+	transition: opacity 0.15s ease;
 }
 
 .tab-frame.active {
 	z-index: 1;
-	visibility: visible;
+	opacity: 1;
 	pointer-events: auto;
 }
 
@@ -846,6 +856,7 @@ body.collapsed.peek .sidebar {
 	border-radius: 6px;
 	cursor: pointer;
 	font-size: 14px;
+	transition: background 0.12s ease, color 0.12s ease;
 }
 
 .tabs [data-tab]:hover {
