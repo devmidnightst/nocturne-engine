@@ -742,6 +742,7 @@ $("clear-data").addEventListener("click", async () => {
 	toast("proxied site data cleared");
 });
 $("about-link").addEventListener("click", () => openPanel("about"));
+$("games-btn").addEventListener("click", () => openPanel("games"));
 
 ui.omnibox.addEventListener("submit", (e) => {
 	e.preventDefault();
