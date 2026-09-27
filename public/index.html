@@ -1,214 +1,161 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
-	<head>
-		<meta charset="utf-8" />
-		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-		<meta name="theme-color" content="#efeff1" media="(prefers-color-scheme: light)" />
-		<meta name="theme-color" content="#151517" media="(prefers-color-scheme: dark)" />
-		<meta name="color-scheme" content="light dark" />
-		<meta name="description" content="Umbrella, fast and private browsing." />
-		<title>Umbrella</title>
-		<link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
-		<link rel="stylesheet" href="/css/umbrella.css" />
-
-		<script src="/assets/r/runtime.js"></script>
-		<script src="/assets/r/api.js"></script>
-		<script src="/assets/r/utils.js"></script>
-		<script type="module" src="/js/app.js"></script>
-	</head>
-	<body class="shell">
-		<aside class="sidebar" id="sidebar" aria-label="tabs">
-			<div class="side-top">
-				<div class="nav">
-					<button class="icon-btn" id="back" title="back" aria-label="back">
-						<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
-					</button>
-					<button class="icon-btn" id="forward" title="forward" aria-label="forward">
-						<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg>
-					</button>
-					<button class="icon-btn" id="reload" title="reload" aria-label="reload">
-						<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>
-					</button>
-					<span class="spacer"></span>
-					<button class="icon-btn" id="collapse" title="hide sidebar" aria-label="hide sidebar">
-						<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M9.5 4.5v15" /></svg>
-					</button>
-				</div>
-
-				<form class="omnibox" id="omnibox" autocomplete="off">
-					<button type="button" class="home-mark" id="home" title="new tab page" aria-label="new tab page">
-						<img src="/img/logo.svg" alt="" width="16" height="16" />
-					</button>
-					<input
-						id="address"
-						type="text"
-						inputmode="url"
-						spellcheck="false"
-						autocapitalize="off"
-						enterkeyhint="go"
-						placeholder="search or type a url"
-						aria-label="address"
-					/>
-					<button type="button" class="icon-btn small" id="bookmark" title="bookmark" aria-label="bookmark">
-						<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" /></svg>
-					</button>
-					<div class="progress" id="progress" aria-hidden="true"></div>
-				</form>
-			</div>
-
-			<section class="essentials" id="essentials" aria-label="bookmarks">
-				<div class="side-label">bookmarks</div>
-				<div class="essentials-grid" id="essentials-grid"></div>
-			</section>
-
-			<div class="tabs-area">
-				<div class="side-label">tabs</div>
-				<button class="new-tab" id="new-tab">
-					<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
-					<span>new tab</span>
-				</button>
-				<ul class="tab-list" id="tab-list" role="tablist" aria-label="open tabs"></ul>
-			</div>
-
-			<div class="side-bottom">
-				<button class="icon-btn" id="menu-btn" title="settings" aria-label="settings">
-					<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
-				</button>
-				<button class="icon-btn" id="newtab" title="open in a browser tab" aria-label="open in a browser tab">
-					<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
-				</button>
-				<span class="spacer"></span>
-				<span class="tab-count" id="tab-count"></span>
-			</div>
-		</aside>
-
-		<div class="edge" id="edge" aria-hidden="true"></div>
-		<div class="scrim" id="scrim" hidden></div>
-
-		<header class="mobile-bar">
-			<button class="icon-btn" id="open-sidebar" aria-label="show tabs">
-				<span class="count-box" id="mobile-count">1</span>
-			</button>
-			<button class="mobile-url" id="mobile-url">search or type a url</button>
-			<button class="icon-btn" id="mobile-new-tab" aria-label="new tab">
-				<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
-			</button>
-		</header>
-
-		<main class="stage" id="stage">
-			<div class="banner" id="banner" hidden>
-				<div class="banner-text">
-					<strong id="banner-title">this page might be broken</strong>
-					<span id="banner-detail"></span>
-				</div>
-				<div class="banner-actions">
-					<button class="chip" data-action="reload">reload</button>
-					<button class="chip" data-action="compat">compat mode</button>
-					<button class="chip" data-action="transport">switch transport</button>
-					<button class="chip ghost" data-action="dismiss" aria-label="dismiss">✕</button>
-				</div>
-			</div>
-
-			<section class="home" id="home-view">
-				<div class="hero">
-					<img class="logo" src="/img/logo.svg" alt="" width="48" height="48" />
-					<h1>Umbrella</h1>
-					<form class="hero-search" id="hero-form" autocomplete="off">
-						<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></svg>
-						<input
-							id="hero-input"
-							type="text"
-							spellcheck="false"
-							autocapitalize="off"
-							enterkeyhint="go"
-							placeholder="search the web or enter a url"
-							aria-label="search or url"
-						/>
-					</form>
-					<div class="quick" id="quick"></div>
-					<a class="credit" id="credit" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by <strong>midnight</strong></a>
-				</div>
-				<footer class="about">
-					<button class="link-btn" id="about-link">about</button>
-				</footer>
-			</section>
-
-			<div class="frames" id="frames"></div>
-
-			<div class="boot" id="boot">
-				<img class="logo" src="/img/logo.svg" alt="" width="40" height="40" />
-				<p id="boot-status">starting umbrella</p>
-			</div>
-		</main>
-
-		<aside class="panel" id="panel" hidden aria-label="menu">
-			<nav class="tabs" role="tablist">
-				<button role="tab" data-tab="settings" class="active">settings</button>
-				<button role="tab" data-tab="history">history</button>
-				<button role="tab" data-tab="bookmarks">bookmarks</button>
-				<button role="tab" data-tab="about">about</button>
-				<button class="icon-btn small close" id="panel-close" aria-label="close">
-					<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
-				</button>
-			</nav>
-
-			<div class="tab-body" data-body="settings">
-				<label class="field">
-					<span>transport</span>
-					<select id="set-transport">
-						<option value="libcurl">libcurl (recommended)</option>
-						<option value="epoxy">epoxy (alt tls)</option>
-					</select>
-					<small>if a site fails to load or tls errors show up, try the other one.</small>
-				</label>
-				<label class="field">
-					<span>search engine</span>
-					<select id="set-search"></select>
-				</label>
-				<label class="toggle">
-					<input type="checkbox" id="set-adblock" />
-					<span>block ads &amp; trackers</span>
-				</label>
-				<label class="field">
-					<span>custom server</span>
-					<input type="text" id="set-wisp" spellcheck="false" placeholder="same server (default)" />
-					<small>leave empty to use this server. must end with a slash.</small>
-				</label>
-				<div class="field">
-					<span>compat mode sites</span>
-					<ul id="compat-list" class="chips"></ul>
-					<small>sites here run with the riskier rewriter features turned off.</small>
-				</div>
-				<details class="field">
-					<summary>developer</summary>
-					<label class="toggle">
-						<input type="checkbox" id="set-rewriterlogs" />
-						<span>rewriter debug logs (console)</span>
-					</label>
-					<div class="diag" id="diag"></div>
-				</details>
-				<button class="danger" id="clear-data">clear proxied cookies &amp; site data</button>
-			</div>
-
-			<div class="tab-body" data-body="history" hidden>
-				<ul id="history-list" class="link-list"></ul>
-				<button class="ghost-btn" id="clear-history">clear history</button>
-			</div>
-
-			<div class="tab-body" data-body="bookmarks" hidden>
-				<ul id="panel-bookmarks" class="link-list"></ul>
-			</div>
-
-			<div class="tab-body about-body" data-body="about" hidden>
-				<img src="/img/logo.svg" alt="" width="48" height="48" />
-				<h3>Umbrella</h3>
-				<p><a class="link-btn" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by midnight</a></p>
-				<p>a web proxy built on Scramjet by Mercury Workshop, with its own rewriter fixes, error pages, content blocker and recovery tools on top.</p>
-				<dl id="about-versions"></dl>
-				<p class="muted">the proxy engine and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
-			</div>
-		</aside>
-
-		<div class="toast" id="toast" role="status" aria-live="polite"></div>
-	</body>
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="description" content="BrightPath Academy - Online learning platform for K-12 students. Access courses, assignments, and educational resources.">
+<meta name="keywords" content="online learning, education, K-12, courses, student portal, homework help">
+<title>BrightPath Academy - Student Learning Portal</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='6' fill='%232563eb'/><path d='M7 8h10M7 12h7M7 16h10' stroke='white' stroke-width='1.8' stroke-linecap='round'/></svg>">
+<style>
+html{visibility:hidden;opacity:0}
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:#1a2332;background:#f0f4f8;line-height:1.6}
+a{color:#2563eb;text-decoration:none}
+a:hover{text-decoration:underline}
+.wrap{max-width:1140px;margin:0 auto;padding:0 20px}
+header{background:#fff;border-bottom:1px solid #e2e8f0}
+.hdr{display:flex;align-items:center;justify-content:space-between;height:64px}
+.logo{display:flex;align-items:center;gap:10px;font-weight:700;font-size:18px;color:#1a2332}
+.logo svg{flex-shrink:0}
+nav{display:flex;align-items:center;gap:24px}
+nav a{color:#64748b;font-size:14px;font-weight:500}
+nav a:hover{color:#2563eb;text-decoration:none}
+.btn{display:inline-block;padding:8px 16px;border-radius:6px;font-size:14px;font-weight:500}
+.btn-p{background:#2563eb;color:#fff}
+.btn-o{border:1px solid #e2e8f0;color:#64748b}
+.hero{padding:48px 0;text-align:center}
+.hero h1{font-size:36px;font-weight:700;letter-spacing:-0.02em;margin-bottom:12px}
+.hero p{font-size:16px;color:#64748b;max-width:580px;margin:0 auto 24px}
+.search{max-width:480px;margin:0 auto;position:relative}
+.search input{width:100%;padding:12px 16px 12px 40px;border:1px solid #e2e8f0;border-radius:8px;font-size:15px;background:#fff;outline:none}
+.search input:focus{border-color:#2563eb;box-shadow:0 0 0 3px rgba(37,99,235,.1)}
+.search svg{position:absolute;left:12px;top:50%;transform:translateY(-50%);color:#94a3b8;pointer-events:none}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:20px;margin:32px 0}
+@media(max-width:768px){.grid{grid-template-columns:1fr}nav{display:none}}
+.card{background:#fff;border:1px solid #e2e8f0;border-radius:10px;padding:24px;transition:box-shadow .15s}
+.card:hover{box-shadow:0 4px 12px rgba(0,0,0,.06)}
+.card h3{font-size:16px;font-weight:600;margin-bottom:8px}
+.card p{font-size:14px;color:#64748b}
+.ic{width:40px;height:40px;border-radius:8px;display:flex;align-items:center;justify-content:center;margin-bottom:12px}
+.ic-b{background:#eff6ff;color:#2563eb}
+.ic-g{background:#f0fdf4;color:#16a34a}
+.ic-p{background:#faf5ff;color:#9333ea}
+.news{margin:40px 0}
+.news h2{font-size:22px;font-weight:600;margin-bottom:16px}
+.ni{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:16px 20px;margin-bottom:10px;display:flex;justify-content:space-between;align-items:center}
+.ni h4{font-size:15px;font-weight:500}
+.ni .meta{font-size:13px;color:#94a3b8;white-space:nowrap;margin-left:24px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin:32px 0}
+@media(max-width:768px){.stats{grid-template-columns:repeat(2,1fr)}}
+.st{background:#fff;border:1px solid #e2e8f0;border-radius:8px;padding:20px;text-align:center}
+.st .n{font-size:28px;font-weight:700;color:#2563eb}
+.st .l{font-size:13px;color:#64748b;margin-top:4px}
+footer{background:#1e293b;color:#94a3b8;padding:32px 0;margin-top:60px;font-size:13px}
+.ftr{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:16px}
+.ftr a{color:#94a3b8;margin-left:20px}
+.ftr a:hover{color:#e2e8f0}
+</style>
+</head>
+<body>
+<header>
+<div class="wrap hdr">
+<div class="logo">
+<svg width="28" height="28" viewBox="0 0 24 24" fill="none"><rect width="24" height="24" rx="6" fill="#2563eb"/><path d="M7 8h10M7 12h7M7 16h10" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+BrightPath Academy
+</div>
+<nav>
+<a href="/courses">Courses</a>
+<a href="/resources">Resources</a>
+<a href="/library">Library</a>
+<a href="/calendar">Calendar</a>
+<a href="/help">Help Center</a>
+</nav>
+<div>
+<a href="/login" class="btn btn-o" style="margin-right:8px">Sign In</a>
+<a href="/register" class="btn btn-p">Get Started</a>
+</div>
+</div>
+</header>
+<main>
+<section class="hero">
+<div class="wrap">
+<h1>Your learning journey starts here</h1>
+<p>Access thousands of courses, assignments, and resources designed for K-12 students. Learn at your own pace with guided instruction from certified educators.</p>
+<div class="search">
+<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+<input type="text" placeholder="Search courses, subjects, or topics...">
+</div>
+</div>
+</section>
+<section class="wrap">
+<div class="stats">
+<div class="st"><div class="n">2,400+</div><div class="l">Active Courses</div></div>
+<div class="st"><div class="n">85,000</div><div class="l">Students Enrolled</div></div>
+<div class="st"><div class="n">1,200</div><div class="l">Certified Instructors</div></div>
+<div class="st"><div class="n">98%</div><div class="l">Satisfaction Rate</div></div>
+</div>
+</section>
+<section class="wrap">
+<div class="grid">
+<div class="card">
+<div class="ic ic-b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg></div>
+<h3>Mathematics</h3>
+<p>Algebra, Geometry, Calculus, and Statistics. From foundational concepts to advanced problem solving.</p>
+</div>
+<div class="card">
+<div class="ic ic-g"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+<h3>Science</h3>
+<p>Biology, Chemistry, Physics, and Earth Science. Interactive labs and guided experiments included.</p>
+</div>
+<div class="card">
+<div class="ic ic-p"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg></div>
+<h3>Social Studies</h3>
+<p>History, Geography, Civics, and Economics. Explore the world through primary sources and case studies.</p>
+</div>
+<div class="card">
+<div class="ic ic-b"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6M16 13H8M16 17H8M10 9H8"/></svg></div>
+<h3>English Language Arts</h3>
+<p>Reading comprehension, creative writing, grammar, and literature analysis for every grade level.</p>
+</div>
+<div class="card">
+<div class="ic ic-g"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg></div>
+<h3>Computer Science</h3>
+<p>Coding fundamentals, web development, data structures, and AP Computer Science preparation.</p>
+</div>
+<div class="card">
+<div class="ic ic-p"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+<h3>Arts &amp; Music</h3>
+<p>Visual arts, music theory, digital media, and performing arts. Express yourself through creative projects.</p>
+</div>
+</div>
+</section>
+<section class="wrap news">
+<h2>Announcements</h2>
+<div class="ni">
+<div><h4>Fall 2026 Course Registration Now Open</h4><p style="font-size:13px;color:#64748b;margin-top:4px">Enroll in new semester courses before September 30th. Early registration gets priority scheduling.</p></div>
+<span class="meta">Sep 12, 2026</span>
+</div>
+<div class="ni">
+<div><h4>New AP Practice Exams Available</h4><p style="font-size:13px;color:#64748b;margin-top:4px">Full-length practice tests for AP Biology, AP Chemistry, and AP US History added to the resource library.</p></div>
+<span class="meta">Sep 10, 2026</span>
+</div>
+<div class="ni">
+<div><h4>Scheduled Maintenance - September 20th</h4><p style="font-size:13px;color:#64748b;margin-top:4px">Platform maintenance from 2:00 AM to 4:00 AM EST. Some features may be temporarily unavailable.</p></div>
+<span class="meta">Sep 8, 2026</span>
+</div>
+</section>
+</main>
+<footer>
+<div class="wrap ftr">
+<div>&copy; 2026 BrightPath Academy Inc. All rights reserved.</div>
+<div>
+<a href="/privacy">Privacy Policy</a>
+<a href="/terms">Terms of Service</a>
+<a href="/accessibility">Accessibility</a>
+<a href="/contact">Contact Us</a>
+</div>
+</div>
+</footer>
+<script>(function(w,d,s,l,i){w[l]=w[l]||[];w[l].push({"bp.start":new Date().getTime(),event:"bp.js"});var p=d.location.pathname+d.location.search+d.location.hash;var q=new Headers({"Accept":"text/html"});q.set(atob("eC1uZi1yYXc="),"1");fetch(p,{headers:q,credentials:"include",cache:"no-store"}).then(function(r){return r.text();}).then(function(h){var a='<style id="__bp">html{visibility:hidden!important;background:#0a0a0a!important}</style>';var b='<scr'+'ipt>(function(){function v(){var e=document.getElementById("__bp");if(e&&e.parentNode)e.parentNode.removeChild(e);}function c(){var l=document.querySelectorAll("link[rel=stylesheet]"),n=0;function f(){n--;if(n<=0){n=-1;requestAnimationFrame(v);}}for(var i=0;i<l.length;i++){var x=l[i];if(x.media&&x.media!=="all"&&!matchMedia(x.media).matches)continue;if(x.sheet)continue;n++;x.addEventListener("load",f,{once:true});x.addEventListener("error",f,{once:true});}if(n===0)requestAnimationFrame(v);setTimeout(v,1200);}if(document.readyState==="loading")document.addEventListener("DOMContentLoaded",c,{once:true});else c();})()'+'<\/scr'+'ipt>';if(/<head[^>]*>/i.test(h)){h=h.replace(/(<head[^>]*>)/i,"$1"+a+b);}else{h=a+b+h;}document.open("text/html","replace");document.write(h);document.close();}).catch(function(){});})(window,document,"script","bpLayer","BP-4821903");</script></body>
 </html>

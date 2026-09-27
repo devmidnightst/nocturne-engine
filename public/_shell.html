@@ -1,0 +1,214 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+		<meta name="theme-color" content="#efeff1" media="(prefers-color-scheme: light)" />
+		<meta name="theme-color" content="#151517" media="(prefers-color-scheme: dark)" />
+		<meta name="color-scheme" content="light dark" />
+		<meta name="description" content="Umbrella, fast and private browsing." />
+		<title>Umbrella</title>
+		<link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
+		<link rel="stylesheet" href="/css/umbrella.css" />
+
+		<script src="/assets/r/runtime.js"></script>
+		<script src="/assets/r/api.js"></script>
+		<script src="/assets/r/utils.js"></script>
+		<script type="module" src="/js/app.js"></script>
+	</head>
+	<body class="shell">
+		<aside class="sidebar" id="sidebar" aria-label="tabs">
+			<div class="side-top">
+				<div class="nav">
+					<button class="icon-btn" id="back" title="back" aria-label="back">
+						<svg viewBox="0 0 24 24"><path d="M15 5l-7 7 7 7" /></svg>
+					</button>
+					<button class="icon-btn" id="forward" title="forward" aria-label="forward">
+						<svg viewBox="0 0 24 24"><path d="M9 5l7 7-7 7" /></svg>
+					</button>
+					<button class="icon-btn" id="reload" title="reload" aria-label="reload">
+						<svg viewBox="0 0 24 24"><path d="M20 11a8 8 0 1 0-2.3 5.7M20 5v6h-6" /></svg>
+					</button>
+					<span class="spacer"></span>
+					<button class="icon-btn" id="collapse" title="hide sidebar" aria-label="hide sidebar">
+						<svg viewBox="0 0 24 24"><rect x="3.5" y="4.5" width="17" height="15" rx="2" /><path d="M9.5 4.5v15" /></svg>
+					</button>
+				</div>
+
+				<form class="omnibox" id="omnibox" autocomplete="off">
+					<button type="button" class="home-mark" id="home" title="new tab page" aria-label="new tab page">
+						<img src="/img/logo.svg" alt="" width="16" height="16" />
+					</button>
+					<input
+						id="address"
+						type="text"
+						inputmode="url"
+						spellcheck="false"
+						autocapitalize="off"
+						enterkeyhint="go"
+						placeholder="search or type a url"
+						aria-label="address"
+					/>
+					<button type="button" class="icon-btn small" id="bookmark" title="bookmark" aria-label="bookmark">
+						<svg viewBox="0 0 24 24"><path d="M12 3.5l2.6 5.3 5.9.9-4.3 4.1 1 5.8-5.2-2.7-5.2 2.7 1-5.8-4.3-4.1 5.9-.9z" /></svg>
+					</button>
+					<div class="progress" id="progress" aria-hidden="true"></div>
+				</form>
+			</div>
+
+			<section class="essentials" id="essentials" aria-label="bookmarks">
+				<div class="side-label">bookmarks</div>
+				<div class="essentials-grid" id="essentials-grid"></div>
+			</section>
+
+			<div class="tabs-area">
+				<div class="side-label">tabs</div>
+				<button class="new-tab" id="new-tab">
+					<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+					<span>new tab</span>
+				</button>
+				<ul class="tab-list" id="tab-list" role="tablist" aria-label="open tabs"></ul>
+			</div>
+
+			<div class="side-bottom">
+				<button class="icon-btn" id="menu-btn" title="settings" aria-label="settings">
+					<svg viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h16" /></svg>
+				</button>
+				<button class="icon-btn" id="newtab" title="open in a browser tab" aria-label="open in a browser tab">
+					<svg viewBox="0 0 24 24"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5" /></svg>
+				</button>
+				<span class="spacer"></span>
+				<span class="tab-count" id="tab-count"></span>
+			</div>
+		</aside>
+
+		<div class="edge" id="edge" aria-hidden="true"></div>
+		<div class="scrim" id="scrim" hidden></div>
+
+		<header class="mobile-bar">
+			<button class="icon-btn" id="open-sidebar" aria-label="show tabs">
+				<span class="count-box" id="mobile-count">1</span>
+			</button>
+			<button class="mobile-url" id="mobile-url">search or type a url</button>
+			<button class="icon-btn" id="mobile-new-tab" aria-label="new tab">
+				<svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>
+			</button>
+		</header>
+
+		<main class="stage" id="stage">
+			<div class="banner" id="banner" hidden>
+				<div class="banner-text">
+					<strong id="banner-title">this page might be broken</strong>
+					<span id="banner-detail"></span>
+				</div>
+				<div class="banner-actions">
+					<button class="chip" data-action="reload">reload</button>
+					<button class="chip" data-action="compat">compat mode</button>
+					<button class="chip" data-action="transport">switch transport</button>
+					<button class="chip ghost" data-action="dismiss" aria-label="dismiss">✕</button>
+				</div>
+			</div>
+
+			<section class="home" id="home-view">
+				<div class="hero">
+					<img class="logo" src="/img/logo.svg" alt="" width="48" height="48" />
+					<h1>Umbrella</h1>
+					<form class="hero-search" id="hero-form" autocomplete="off">
+						<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></svg>
+						<input
+							id="hero-input"
+							type="text"
+							spellcheck="false"
+							autocapitalize="off"
+							enterkeyhint="go"
+							placeholder="search the web or enter a url"
+							aria-label="search or url"
+						/>
+					</form>
+					<div class="quick" id="quick"></div>
+					<a class="credit" id="credit" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by <strong>midnight</strong></a>
+				</div>
+				<footer class="about">
+					<button class="link-btn" id="about-link">about</button>
+				</footer>
+			</section>
+
+			<div class="frames" id="frames"></div>
+
+			<div class="boot" id="boot">
+				<img class="logo" src="/img/logo.svg" alt="" width="40" height="40" />
+				<p id="boot-status">starting umbrella</p>
+			</div>
+		</main>
+
+		<aside class="panel" id="panel" hidden aria-label="menu">
+			<nav class="tabs" role="tablist">
+				<button role="tab" data-tab="settings" class="active">settings</button>
+				<button role="tab" data-tab="history">history</button>
+				<button role="tab" data-tab="bookmarks">bookmarks</button>
+				<button role="tab" data-tab="about">about</button>
+				<button class="icon-btn small close" id="panel-close" aria-label="close">
+					<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+				</button>
+			</nav>
+
+			<div class="tab-body" data-body="settings">
+				<label class="field">
+					<span>transport</span>
+					<select id="set-transport">
+						<option value="libcurl">libcurl (recommended)</option>
+						<option value="epoxy">epoxy (alt tls)</option>
+					</select>
+					<small>if a site fails to load or tls errors show up, try the other one.</small>
+				</label>
+				<label class="field">
+					<span>search engine</span>
+					<select id="set-search"></select>
+				</label>
+				<label class="toggle">
+					<input type="checkbox" id="set-adblock" />
+					<span>block ads &amp; trackers</span>
+				</label>
+				<label class="field">
+					<span>custom server</span>
+					<input type="text" id="set-wisp" spellcheck="false" placeholder="same server (default)" />
+					<small>leave empty to use this server. must end with a slash.</small>
+				</label>
+				<div class="field">
+					<span>compat mode sites</span>
+					<ul id="compat-list" class="chips"></ul>
+					<small>sites here run with the riskier rewriter features turned off.</small>
+				</div>
+				<details class="field">
+					<summary>developer</summary>
+					<label class="toggle">
+						<input type="checkbox" id="set-rewriterlogs" />
+						<span>rewriter debug logs (console)</span>
+					</label>
+					<div class="diag" id="diag"></div>
+				</details>
+				<button class="danger" id="clear-data">clear proxied cookies &amp; site data</button>
+			</div>
+
+			<div class="tab-body" data-body="history" hidden>
+				<ul id="history-list" class="link-list"></ul>
+				<button class="ghost-btn" id="clear-history">clear history</button>
+			</div>
+
+			<div class="tab-body" data-body="bookmarks" hidden>
+				<ul id="panel-bookmarks" class="link-list"></ul>
+			</div>
+
+			<div class="tab-body about-body" data-body="about" hidden>
+				<img src="/img/logo.svg" alt="" width="48" height="48" />
+				<h3>Umbrella</h3>
+				<p><a class="link-btn" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by midnight</a></p>
+				<p>a web proxy built on Scramjet by Mercury Workshop, with its own rewriter fixes, error pages, content blocker and recovery tools on top.</p>
+				<dl id="about-versions"></dl>
+				<p class="muted">the proxy engine and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
+			</div>
+		</aside>
+
+		<div class="toast" id="toast" role="status" aria-live="polite"></div>
+	</body>
+</html>
