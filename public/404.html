@@ -21,5 +21,10 @@
 			<p>this page doesn't exist on this Umbrella server.</p>
 			<p><a href="/" target="_top">back to Umbrella</a></p>
 		</main>
+		<script>
+		if (window.self !== window.top && /^\/~\/xf\//.test(location.pathname)) {
+			setTimeout(() => location.reload(), 1200);
+		}
+		</script>
 	</body>
 </html>

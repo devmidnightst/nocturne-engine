@@ -38,14 +38,6 @@ const ui = {
 	edge: $("edge"),
 };
 
-const QUICK_LINKS = [
-	{ name: "Discord", url: "https://discord.com/app" },
-	{ name: "YouTube", url: "https://www.youtube.com" },
-	{ name: "Spotify", url: "https://open.spotify.com" },
-	{ name: "Reddit", url: "https://www.reddit.com" },
-	{ name: "GitHub", url: "https://github.com" },
-	{ name: "Wikipedia", url: "https://en.wikipedia.org" },
-];
 
 const LEGACY_CURRENT_KEY = "_p8q2:current";
 const FRAME_ALLOW =
@@ -580,11 +572,6 @@ ui.mobileUrl.addEventListener("click", () => {
 $("mobile-new-tab").addEventListener("click", () => openTab());
 $("new-tab").addEventListener("click", () => openTab());
 
-function renderQuick() {
-	$("quick").replaceChildren(
-		...QUICK_LINKS.map((q) => el("button", { class: "quick-item", onclick: () => navigate(q.url) }, q.name))
-	);
-}
 
 function linkItem(item, onRemove) {
 	const li = el("li");
@@ -816,7 +803,6 @@ function cleanAddressBar() {
 }
 
 async function boot() {
-	renderQuick();
 	applySidebarState();
 
 	const go = new URLSearchParams(location.search).get("go");
