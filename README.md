@@ -6,7 +6,7 @@ it's built on the pinned 2.x packages (scramjet `2.0.67-alpha.2`, scramjet-contr
 
 what makes it better than the stock scramjet demos:
 
-- **eleven patches to the 2.x bundles** fix real bugs, and the e2e suite fails on stock scramjet for every one of them it covers. two are aimed right at discord: websockets where the server talks first (the gateway), and set-cookie getting dropped by the http cache. details are in [docs/PATCHES.md](docs/PATCHES.md).
+- **twelve patches to the 2.x bundles** fix real bugs, and the e2e suite fails on stock scramjet for every one of them it covers. two are aimed right at discord: websockets where the server talks first (the gateway), and set-cookie getting dropped by the http cache. details are in [docs/PATCHES.md](docs/PATCHES.md).
 - **error pages that say what actually broke**. stock scramjet shows "Internal Service Worker Error" for everything. umbrella tells you whether the domain doesn't exist, the server blocked it, the site refused, it timed out or tls failed. it asks the server to redo the dns and tcp step when the transport's own error is too vague.
 - **recovery**. when a page throws rewriter errors or loads blank, a banner offers a reload, compat mode for that site, or switching transport.
 - **optional ad and tracker blocking**, answered locally inside the proxied page, plus discord's telemetry endpoints.
@@ -200,7 +200,8 @@ umbrella's own, in `public/js/plugins/umbrella-plugins.js`:
 - settings: transport (libcurl or epoxy, switched live), search engine, ad blocking, custom wisp url, compat sites, developer toggles, clear data.
 - `ctrl+l` focuses the omnibox, `esc` closes panels.
 - mobile: the panel becomes a bottom sheet and less important buttons hide under 640px.
-- links like `/?go=https://example.com` open straight into the proxy.
+- links like `/?go=https://example.com` open straight into the proxy. the browser's address bar always stays on the bare site (`/`); the current page is kept per tab in sessionStorage, so reloading the tab reopens it.
+- `public/sw.js` waits for the shell to re-register when chrome restarts an idle service worker, instead of letting the navigation fall through to the server's 404 page.
 
 ## testing
 
