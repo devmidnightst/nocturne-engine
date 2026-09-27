@@ -587,8 +587,12 @@ function linkItem(item, onRemove) {
 
 function openPanel(tab = "settings") {
 	ui.panel.hidden = false;
+	tabIndicator.style.transition = "none";
 	selectTab(tab);
-	requestAnimationFrame(() => ui.panel.classList.add("open"));
+	requestAnimationFrame(() => {
+		ui.panel.classList.add("open");
+		requestAnimationFrame(() => { tabIndicator.style.transition = ""; });
+	});
 }
 
 function closePanel() {
@@ -596,9 +600,35 @@ function closePanel() {
 	setTimeout(() => (ui.panel.hidden = true), 200);
 }
 
+const tabOrder = ["settings", "history", "bookmarks", "games", "about"];
+const tabIndicator = $("tab-indicator");
+
+function moveIndicator(btn) {
+	if (!btn) return;
+	const nav = btn.parentElement;
+	const navRect = nav.getBoundingClientRect();
+	const btnRect = btn.getBoundingClientRect();
+	tabIndicator.style.left = (btnRect.left - navRect.left) + "px";
+	tabIndicator.style.width = btnRect.width + "px";
+}
+
 function selectTab(tab) {
-	for (const b of ui.panel.querySelectorAll("[data-tab]")) b.classList.toggle("active", b.dataset.tab === tab);
-	for (const body of ui.panel.querySelectorAll("[data-body]")) body.hidden = body.dataset.body !== tab;
+	const idx = tabOrder.indexOf(tab);
+	if (idx === -1) return;
+	const buttons = ui.panel.querySelectorAll("[data-tab]");
+	let activeBtn = null;
+	for (const b of buttons) {
+		const isActive = b.dataset.tab === tab;
+		b.classList.toggle("active", isActive);
+		if (isActive) activeBtn = b;
+	}
+	const bodies = ui.panel.querySelectorAll("[data-body]");
+	for (const body of bodies) {
+		body.style.transform = `translateX(-${idx * 100}%)`;
+		body.style.opacity = body.dataset.body === tab ? "1" : "0";
+		body.style.pointerEvents = body.dataset.body === tab ? "" : "none";
+	}
+	requestAnimationFrame(() => moveIndicator(activeBtn));
 	if (tab === "history") renderHistory();
 	if (tab === "bookmarks") renderPanelBookmarks();
 	if (tab === "settings") renderSettings();

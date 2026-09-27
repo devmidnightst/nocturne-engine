@@ -152,65 +152,68 @@
 				<button class="icon-btn small close" id="panel-close" aria-label="close">
 					<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
 				</button>
+				<div class="tab-indicator" id="tab-indicator"></div>
 			</nav>
 
-			<div class="tab-body" data-body="settings">
-				<label class="field">
-					<span>transport</span>
-					<select id="set-transport">
-						<option value="libcurl">libcurl (recommended)</option>
-						<option value="epoxy">epoxy (alt tls)</option>
-					</select>
-					<small>if a site fails to load or tls errors show up, try the other one.</small>
-				</label>
-				<label class="field">
-					<span>search engine</span>
-					<select id="set-search"></select>
-				</label>
-				<label class="toggle">
-					<input type="checkbox" id="set-adblock" />
-					<span>block ads &amp; trackers</span>
-				</label>
-				<label class="field">
-					<span>custom server</span>
-					<input type="text" id="set-wisp" spellcheck="false" placeholder="same server (default)" />
-					<small>leave empty to use this server. must end with a slash.</small>
-				</label>
-				<div class="field">
-					<span>compat mode sites</span>
-					<ul id="compat-list" class="chips"></ul>
-					<small>sites here run with the riskier rewriter features turned off.</small>
-				</div>
-				<details class="field">
-					<summary>developer</summary>
-					<label class="toggle">
-						<input type="checkbox" id="set-rewriterlogs" />
-						<span>rewriter debug logs (console)</span>
+			<div class="tab-slider" id="tab-slider">
+				<div class="tab-body" data-body="settings">
+					<label class="field">
+						<span>transport</span>
+						<select id="set-transport">
+							<option value="libcurl">libcurl (recommended)</option>
+							<option value="epoxy">epoxy (alt tls)</option>
+						</select>
+						<small>if a site fails to load or tls errors show up, try the other one.</small>
 					</label>
-					<div class="diag" id="diag"></div>
-				</details>
-				<button class="danger" id="clear-data">clear proxied cookies &amp; site data</button>
-			</div>
+					<label class="field">
+						<span>search engine</span>
+						<select id="set-search"></select>
+					</label>
+					<label class="toggle">
+						<input type="checkbox" id="set-adblock" />
+						<span>block ads &amp; trackers</span>
+					</label>
+					<label class="field">
+						<span>custom server</span>
+						<input type="text" id="set-wisp" spellcheck="false" placeholder="same server (default)" />
+						<small>leave empty to use this server. must end with a slash.</small>
+					</label>
+					<div class="field">
+						<span>compat mode sites</span>
+						<ul id="compat-list" class="chips"></ul>
+						<small>sites here run with the riskier rewriter features turned off.</small>
+					</div>
+					<details class="field">
+						<summary>developer</summary>
+						<label class="toggle">
+							<input type="checkbox" id="set-rewriterlogs" />
+							<span>rewriter debug logs (console)</span>
+						</label>
+						<div class="diag" id="diag"></div>
+					</details>
+					<button class="danger" id="clear-data">clear proxied cookies &amp; site data</button>
+				</div>
 
-			<div class="tab-body" data-body="history" hidden>
-				<ul id="history-list" class="link-list"></ul>
-				<button class="ghost-btn" id="clear-history">clear history</button>
-			</div>
+				<div class="tab-body" data-body="history">
+					<ul id="history-list" class="link-list"></ul>
+					<button class="ghost-btn" id="clear-history">clear history</button>
+				</div>
 
-			<div class="tab-body" data-body="bookmarks" hidden>
-				<ul id="panel-bookmarks" class="link-list"></ul>
-			</div>
+				<div class="tab-body" data-body="bookmarks">
+					<ul id="panel-bookmarks" class="link-list"></ul>
+				</div>
 
-			<div class="tab-body games-body" data-body="games" hidden>
-				<div id="games"></div>
-			</div>
+				<div class="tab-body games-body" data-body="games">
+					<div id="games"></div>
+				</div>
 
-			<div class="tab-body about-body" data-body="about" hidden>
-				<img src="/img/logo.svg" alt="" width="48" height="48" />
-				<h3>Umbrella</h3>
-				<p><a class="link-btn" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by midnight</a></p>
+				<div class="tab-body about-body" data-body="about">
+					<img src="/img/logo.svg" alt="" width="48" height="48" />
+					<h3>Umbrella</h3>
+					<p><a class="link-btn" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by midnight</a></p>
 <dl id="about-versions"></dl>
-				<p class="muted">the proxy engine and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
+					<p class="muted">the proxy engine and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
+				</div>
 			</div>
 		</aside>
 
