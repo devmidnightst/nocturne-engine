@@ -6,14 +6,14 @@
 		<meta name="theme-color" content="#efeff1" media="(prefers-color-scheme: light)" />
 		<meta name="theme-color" content="#151517" media="(prefers-color-scheme: dark)" />
 		<meta name="color-scheme" content="light dark" />
-		<meta name="description" content="Umbrella, a fast Scramjet powered web proxy." />
+		<meta name="description" content="Umbrella, fast and private browsing." />
 		<title>Umbrella</title>
 		<link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
 		<link rel="stylesheet" href="/css/umbrella.css" />
 
-		<script src="/scramjet/scramjet.js"></script>
-		<script src="/controller/controller.api.js"></script>
-		<script src="/utils/scramjet-utils.js"></script>
+		<script src="/assets/r/runtime.js"></script>
+		<script src="/assets/r/api.js"></script>
+		<script src="/assets/r/utils.js"></script>
 		<script type="module" src="/js/app.js"></script>
 	</head>
 	<body class="shell">
@@ -156,8 +156,8 @@
 				<label class="field">
 					<span>transport</span>
 					<select id="set-transport">
-						<option value="libcurl">libcurl (wisp, curl tls, recommended)</option>
-						<option value="epoxy">epoxy (wisp, rust tls)</option>
+						<option value="libcurl">libcurl (recommended)</option>
+						<option value="epoxy">epoxy (alt tls)</option>
 					</select>
 					<small>if a site fails to load or tls errors show up, try the other one.</small>
 				</label>
@@ -170,7 +170,7 @@
 					<span>block ads &amp; trackers</span>
 				</label>
 				<label class="field">
-					<span>wisp server</span>
+					<span>custom server</span>
 					<input type="text" id="set-wisp" spellcheck="false" placeholder="same server (default)" />
 					<small>leave empty to use this server. must end with a slash.</small>
 				</label>
@@ -205,7 +205,7 @@
 				<p><a class="link-btn" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by midnight</a></p>
 				<p>a web proxy built on Scramjet by Mercury Workshop, with its own rewriter fixes, error pages, content blocker and recovery tools on top.</p>
 				<dl id="about-versions"></dl>
-				<p class="muted">scramjet and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
+				<p class="muted">the proxy engine and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
 			</div>
 		</aside>
 

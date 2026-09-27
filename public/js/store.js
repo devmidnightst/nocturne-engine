@@ -1,10 +1,11 @@
-const PREFIX = "umbrella:";
-const OLD_PREFIX = "nocturne:";
+const PREFIX = "_p8q2:";
+const MIGRATE_PREFIXES = ["nocturne:", "umbrella:"];
 
 try {
 	for (const key of Object.keys(localStorage)) {
-		if (!key.startsWith(OLD_PREFIX)) continue;
-		const name = PREFIX + key.slice(OLD_PREFIX.length);
+		const old = MIGRATE_PREFIXES.find((p) => key.startsWith(p));
+		if (!old) continue;
+		const name = PREFIX + key.slice(old.length);
 		if (localStorage.getItem(name) == null) localStorage.setItem(name, localStorage.getItem(key));
 		localStorage.removeItem(key);
 	}
@@ -36,7 +37,7 @@ export const SEARCH_ENGINES = {
 
 const DEFAULT_SETTINGS = {
 	transport: "libcurl",
-	wispUrl: "",
+	_srvUrl: "",
 	searchEngine: "duckduckgo",
 	blockAds: true,
 	rewriterLogs: false,
@@ -62,13 +63,13 @@ export const settings = {
 	},
 };
 
-export function defaultWispUrl() {
+export function defaultServerUrl() {
 	return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/wisp/`;
 }
 
-export function wispUrl() {
-	const custom = settings.get().wispUrl.trim();
-	return custom || defaultWispUrl();
+export function serverUrl() {
+	const custom = (settings.get()._srvUrl || "").trim();
+	return custom || defaultServerUrl();
 }
 
 export const bookmarks = {

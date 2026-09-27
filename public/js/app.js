@@ -1,12 +1,12 @@
 import { createEngine, versionInfo } from "./engine.js";
 import { resolveInput } from "./omnibox.js";
-import { settings, bookmarks, history, session, icons, SEARCH_ENGINES, defaultWispUrl } from "./store.js";
+import { settings, bookmarks, history, session, icons, SEARCH_ENGINES, defaultServerUrl } from "./store.js";
 
 const nestedInShell = (() => {
 	if (window.self === window.top) return false;
 	try {
 		if (window.top.location.origin !== location.origin) return false;
-		const adopt = window.top.__umbrellaAdopt;
+		const adopt = window.top.__nc_a3c8;
 		if (typeof adopt === "function" && adopt(window.frameElement, new URLSearchParams(location.search).get("go"))) return true;
 		window.top.location.replace(location.href);
 		return true;
@@ -47,7 +47,7 @@ const QUICK_LINKS = [
 	{ name: "Wikipedia", url: "https://en.wikipedia.org" },
 ];
 
-const LEGACY_CURRENT_KEY = "umbrella:current";
+const LEGACY_CURRENT_KEY = "_p8q2:current";
 const FRAME_ALLOW =
 	"fullscreen; clipboard-read; clipboard-write; autoplay; encrypted-media; picture-in-picture; microphone; camera; display-capture";
 
@@ -481,10 +481,10 @@ async function switchTransport() {
 }
 
 window.addEventListener("message", async (e) => {
-	if (e.origin !== location.origin || !e.data || typeof e.data.__umbrella !== "string") return;
+	if (e.origin !== location.origin || !e.data || typeof e.data.__nc_m9d1 !== "string") return;
 	const tab = tabs.find((t) => t.iframe && t.iframe.contentWindow === e.source) ?? active;
-	if (e.data.__umbrella === "home") showHome(tab);
-	if (e.data.__umbrella === "switch-transport") {
+	if (e.data.__nc_m9d1 === "home") showHome(tab);
+	if (e.data.__nc_m9d1 === "switch-transport") {
 		await switchTransport();
 		tab?.handle?.reload();
 	}
@@ -657,8 +657,8 @@ function renderSettings() {
 	$("set-transport").value = engine?.transportKind ?? s.transport;
 	$("set-adblock").checked = s.blockAds;
 	$("set-rewriterlogs").checked = s.rewriterLogs;
-	$("set-wisp").value = s.wispUrl;
-	$("set-wisp").placeholder = defaultWispUrl();
+	$("set-wisp").value = s._srvUrl;
+	$("set-wisp").placeholder = defaultServerUrl();
 	const search = $("set-search");
 	if (!search.options.length) {
 		for (const [id, eng] of Object.entries(SEARCH_ENGINES)) search.append(new Option(eng.name, id));
@@ -706,8 +706,8 @@ function renderDiag() {
 function renderAbout() {
 	const rows = [
 		["version", "Umbrella 1.0.0"],
-		["scramjet", `${versionInfo.version} (${versionInfo.build})`],
-		["controller", globalThis.$scramjetController.VERSION],
+		["engine", `${versionInfo.version} (${versionInfo.build})`],
+		["runtime", globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")]?.VERSION],
 		["transport", engine?.transportKind ?? settings.get().transport],
 	];
 	$("about-versions").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
@@ -730,12 +730,12 @@ $("set-rewriterlogs").addEventListener("change", (e) => settings.set({ rewriterL
 $("set-wisp").addEventListener("change", (e) => {
 	const v = e.target.value.trim();
 	if (v && (!/^wss?:\/\//.test(v) || !v.endsWith("/"))) {
-		toast("wisp url must start with ws:// or wss:// and end with /", 4000);
-		e.target.value = settings.get().wispUrl;
+		toast("server url must start with ws:// or wss:// and end with /", 4000);
+		e.target.value = settings.get()._srvUrl;
 		return;
 	}
-	settings.set({ wispUrl: v });
-	toast("wisp server saved, reload to apply");
+	settings.set({ _srvUrl: v });
+	toast("server saved, reload to apply");
 });
 $("clear-history").addEventListener("click", () => {
 	history.clear();
@@ -803,7 +803,7 @@ window.addEventListener("pagehide", () => {
 	if (saveTimer) writeSession();
 });
 
-window.__umbrellaAdopt = (frameEl, go) => {
+window.__nc_a3c8 = (frameEl, go) => {
 	const tab = tabs.find((t) => t.iframe && t.iframe === frameEl);
 	if (!tab || !engine) return false;
 	const target = go ? resolveInput(go) : null;

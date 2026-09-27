@@ -7,8 +7,8 @@ import {
 	diagnoseKind,
 } from "../error-page.js";
 
-const { ManagedPlugin } = globalThis.$scramjetController;
-const { ScramjetHeaders } = globalThis.$scramjet;
+const { ManagedPlugin } = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
+const { ScramjetHeaders } = globalThis[atob("JHNjcmFtamV0")];
 
 const isNavigation = (dest) => dest === "document" || dest === "iframe" || dest === "frame";
 
@@ -104,7 +104,7 @@ export class RecoveryPlugin extends ManagedPlugin {
 			};
 
 			try {
-				Object.defineProperty(win, "__umbrellaRewriteErrorSink", {
+				Object.defineProperty(win, "__nc_s8f3", {
 					value: (url, message) => {
 						state.rewriteErrors++;
 						note("rewrite", `${url || "(inline)"}: ${message}`);
