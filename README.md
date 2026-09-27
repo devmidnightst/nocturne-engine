@@ -33,12 +33,12 @@ nocturne-engine/
     packages.js             finds package dirs even when exports maps hide package.json
     check.js                `npm run check`: versions + patch sanity
   public/                   the shell ui
-    index.html              omnibox, frame, settings / history / bookmarks panel
+    index.html              sidebar (omnibox, bookmarks, tabs), tab frames, settings / history / bookmarks panel
     sw.js                   service worker, hands /~/sj/ requests to the controller
-    css/umbrella.css        plain light/dark theme, bottom sheet menu under 640px
+    css/umbrella.css        plain light/dark theme, sidebar becomes a drawer under 640px
     js/engine.js            scramjet controller wiring, transports, plugins, compat flags
     js/app.js               ui logic
-    js/store.js             settings, bookmarks, history (localStorage)
+    js/store.js             settings, bookmarks, history, open tabs, site icons (localStorage)
     js/omnibox.js           url vs search detection
     js/error-page.js        error classification + branded error pages
     js/plugins/             umbrella frame plugins + blocklist
@@ -190,17 +190,21 @@ umbrella's own, in `public/js/plugins/umbrella-plugins.js`:
 - **ErrorPagePlugin**: replaces a failed navigation with a branded page. transports report most failures as "the connection closed", so for vague errors it calls `/api/diagnose`, which redoes the dns lookup and a tcp connect with the same ip rules as wisp and reports `dns`, `blocked`, `refused`, `timeout` or `reachable`. the page has retry, switch transport and home buttons.
 - **ContentBlockerPlugin**: when "block ads & trackers" is on, requests to ad and analytics hosts (plus discord's `/api/v*/science` and `/metrics`, and youtube's ad pings) are answered locally with an empty response of the right type, so ad loaders don't retry in a loop. it never blocks top level navigations. it only runs inside proxied pages, so ads on the umbrella shell itself aren't touched.
 - **RecoveryPlugin**: counts uncaught errors, rejections and rewriter failures in each proxied window. 3.5s after load it reports whether the page looks blank, and the shell shows the recovery banner.
-- **ShellBridgePlugin**: title, loading bar and url updates for the ui.
+- **ShellBridgePlugin**: title, icon, loading bar and url updates for the ui. it also sends `target=_blank` links, middle clicks and ctrl clicks to the sidebar as new tabs instead of new browser tabs.
 
 ## ui
 
+- zen style vertical tabs in a left sidebar. every tab keeps its own live frame, so switching tabs never reloads a page and audio keeps playing in the background. tabs can be dragged to reorder, middle clicked to close, and the sidebar can be hidden (hover the left edge to peek at it).
+- bookmarks sit above the tabs as a grid of site icons. clicking one switches to its open tab or opens it.
+- open tabs are saved in localStorage, so a reload or a new visit brings them back. only the active tab loads right away, the rest load when you click them.
+- site icons are fetched once through the proxy, shrunk to 32px and cached per host.
 - omnibox that takes a url, a bare host (`discord.com`) or a search. the search engine is picked in settings.
-- back, forward, reload, loading bar, open current page in a new tab, bookmark star.
+- back, forward, reload, loading bar, open current page in a real browser tab, bookmark star.
 - bookmarks and history panels. everything is stored in localStorage and never leaves the browser.
 - settings: transport (libcurl or epoxy, switched live), search engine, ad blocking, custom wisp url, compat sites, developer toggles, clear data.
-- `ctrl+l` focuses the omnibox, `esc` closes panels.
-- mobile: the panel becomes a bottom sheet and less important buttons hide under 640px.
-- links like `/?go=https://example.com` open straight into the proxy. the browser's address bar always stays on the bare site (`/`); the current page is kept per tab in sessionStorage, so reloading the tab reopens it.
+- `ctrl+l` focuses the omnibox, `alt+t` opens a tab, `alt+w` closes one, `esc` closes panels.
+- mobile: under 640px the sidebar becomes a drawer behind the tab count button and the panel becomes a bottom sheet.
+- links like `/?go=https://example.com` open straight into the proxy as a new tab. the browser's address bar always stays on the bare site (`/`).
 - `public/sw.js` waits for the shell to re-register when chrome restarts an idle service worker, instead of letting the navigation fall through to the server's 404 page.
 
 ## testing
@@ -220,7 +224,7 @@ the e2e suite starts the server and a local fixture site, then loads the fixture
 - keyword glue, `setAttribute` coercion, a same origin child iframe
 - audio playback (test/fixture/site/media.html): `<audio>` with range requests and seeking, media source extensions fed from fetch, xhr, a streamed body and a binary POST (how youtube music streams), range requests after a cached full download (how spotify fetches audio), live streams, web audio, eme clearkey and the media element `src`/`currentSrc` getters
 
-it also checks the error page and the ad blocker. `UMBRELLA_E2E_URLS=https://a.com,https://b.com` adds real site smoke tests with screenshots. `CHROME_PATH` points it at a chromium binary if playwright can't find one.
+it also checks the error page, the ad blocker and the tabs (icons, `target=_blank` and middle click landing in the sidebar, switching without a reload, restoring after a reload). `UMBRELLA_E2E_URLS=https://a.com,https://b.com` adds real site smoke tests with screenshots. `CHROME_PATH` points it at a chromium binary if playwright can't find one.
 
 `UMBRELLA_DISABLE_PATCHES=all npm run test:e2e` shows what stock scramjet fails.
 
@@ -261,4 +265,11 @@ see [docs/DISCORD.md](docs/DISCORD.md). short version: the patches fix the proxy
 
 ## license
 
-scramjet, the controller, scramjet-utils and both transports are AGPL-3.0, so umbrella is AGPL-3.0 too. if you run a modified version for other people, you have to offer them the source. a link to your repo in the about panel (`public/index.html`) covers it.
+umbrella is AGPL-3.0 (`LICENSE`) with extra terms in `NOTICE`, added under section 7 of the license. in short, if you fork it, host it or rebrand it:
+
+- keep the "Umbrella by midnight" credit box on the home page, linked to this repo, readable and visible without scrolling. a renamed fork says "based on Umbrella by midnight".
+- keep the same credit in the about panel and keep `NOTICE` with the source.
+- don't pass a modified version off as the original.
+- like any AGPL program, if you run a modified version for other people, you have to offer them its source.
+
+scramjet, the controller, scramjet-utils and both transports are AGPL-3.0 by Mercury Workshop and keep their own licenses. the extra terms only cover umbrella's own code.

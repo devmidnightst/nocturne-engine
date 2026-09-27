@@ -83,42 +83,48 @@ function epoxyWithLibcurlSockets(epoxy, url) {
 	};
 }
 
-function withAbortableRequests(transport) {
+function frameTransport(getBase) {
 	const inflight = new Set();
-	const request = transport.request.bind(transport);
-	transport.request = async (remote, method, body, headers, signal) => {
-		const ac = new AbortController();
-		const onAbort = () => ac.abort();
-		signal?.addEventListener("abort", onAbort, { once: true });
-		inflight.add(ac);
-		const done = () => {
-			inflight.delete(ac);
-			signal?.removeEventListener("abort", onAbort);
-		};
-		let res;
-		try {
-			res = await request(remote, method, body, headers, ac.signal);
-		} catch (err) {
-			done();
-			throw err;
-		}
-		if (res.body instanceof ReadableStream) {
-			let ended = false;
-			const end = () => ended || ((ended = true), done());
-			res.body = res.body.pipeThrough(new TransformStream({ flush: end }));
-			ac.signal.addEventListener("abort", end, { once: true });
-		} else {
-			done();
-		}
-		return res;
+	return {
+		get ready() {
+			return getBase().ready;
+		},
+		init: () => getBase().init(),
+		meta: () => getBase().meta?.(),
+		connect: (...args) => getBase().connect(...args),
+		async request(remote, method, body, headers, signal) {
+			const ac = new AbortController();
+			const onAbort = () => ac.abort();
+			signal?.addEventListener("abort", onAbort, { once: true });
+			inflight.add(ac);
+			const done = () => {
+				inflight.delete(ac);
+				signal?.removeEventListener("abort", onAbort);
+			};
+			let res;
+			try {
+				res = await getBase().request(remote, method, body, headers, ac.signal);
+			} catch (err) {
+				done();
+				throw err;
+			}
+			if (res.body instanceof ReadableStream) {
+				let ended = false;
+				const end = () => ended || ((ended = true), done());
+				res.body = res.body.pipeThrough(new TransformStream({ flush: end }));
+				ac.signal.addEventListener("abort", end, { once: true });
+			} else {
+				done();
+			}
+			return res;
+		},
+		abortInFlight() {
+			const n = inflight.size;
+			for (const ac of inflight) ac.abort();
+			inflight.clear();
+			return n;
+		},
 	};
-	transport.abortInFlight = () => {
-		const n = inflight.size;
-		for (const ac of inflight) ac.abort();
-		inflight.clear();
-		return n;
-	};
-	return transport;
 }
 
 async function createTransport(kind = settings.get().transport) {
@@ -133,7 +139,82 @@ async function createTransport(kind = settings.get().transport) {
 		transport = epoxyWithLibcurlSockets(epoxy, url);
 	}
 	transport.umbrellaKind = kind;
-	return withAbortableRequests(transport);
+	return transport;
+}
+
+const ICON_SIZE = 32;
+
+async function iconDataUrl(blob) {
+	const src = URL.createObjectURL(blob);
+	try {
+		const img = new Image();
+		img.src = src;
+		await img.decode();
+		const w = img.naturalWidth || ICON_SIZE;
+		const h = img.naturalHeight || ICON_SIZE;
+		const scale = Math.min(ICON_SIZE / w, ICON_SIZE / h);
+		const canvas = document.createElement("canvas");
+		canvas.width = canvas.height = ICON_SIZE;
+		canvas
+			.getContext("2d")
+			.drawImage(img, (ICON_SIZE - w * scale) / 2, (ICON_SIZE - h * scale) / 2, w * scale, h * scale);
+		return canvas.toDataURL("image/png");
+	} catch {
+		return null;
+	} finally {
+		URL.revokeObjectURL(src);
+	}
+}
+
+function headerValue(headers, name) {
+	if (!headers) return null;
+	if (typeof headers.get === "function") return headers.get(name);
+	const entries = Array.isArray(headers) ? headers : Object.entries(headers);
+	const hit = entries.find(([k]) => String(k).toLowerCase() === name);
+	if (!hit) return null;
+	return Array.isArray(hit[1]) ? hit[1][0] : hit[1];
+}
+
+async function fetchIconWith(transport, url) {
+	if (url.startsWith("data:image/")) {
+		return iconDataUrl(await (await fetch(url)).blob());
+	}
+	const ac = new AbortController();
+	let timer;
+	const timeout = new Promise((_, reject) => {
+		timer = setTimeout(() => {
+			ac.abort();
+			reject(new Error("icon timed out"));
+		}, 8000);
+	});
+	timeout.catch(() => {});
+	const headers = [
+		["User-Agent", navigator.userAgent],
+		["Accept", "image/avif,image/webp,image/png,image/svg+xml,image/*;q=0.8,*/*;q=0.5"],
+	];
+	try {
+		let target = new URL(url);
+		for (let hop = 0; hop < 4; hop++) {
+			if (!/^https?:$/.test(target.protocol)) return null;
+			const res = await Promise.race([transport.request(target, "GET", null, headers, ac.signal), timeout]);
+			const location = res.status >= 300 && res.status < 400 ? headerValue(res.headers, "location") : null;
+			if (location) {
+				await res.body?.cancel?.().catch(() => {});
+				target = new URL(location, target);
+				continue;
+			}
+			if (res.status < 200 || res.status >= 300) return null;
+			const bytes = await Promise.race([new Response(res.body).arrayBuffer(), timeout]);
+			if (!bytes.byteLength || bytes.byteLength > 512 * 1024) return null;
+			const type = (headerValue(res.headers, "content-type") || "").split(";")[0].trim();
+			return iconDataUrl(new Blob([bytes], { type }));
+		}
+		return null;
+	} catch {
+		return null;
+	} finally {
+		clearTimeout(timer);
+	}
 }
 
 async function registerServiceWorker(onStatus) {
@@ -160,7 +241,7 @@ async function registerServiceWorker(onStatus) {
 	return sw;
 }
 
-export async function createEngine(iframe, events = {}, onStatus) {
+export async function createEngine(events = {}, onStatus) {
 	const sw = await registerServiceWorker(onStatus);
 
 	onStatus?.("starting transport");
@@ -178,30 +259,77 @@ export async function createEngine(iframe, events = {}, onStatus) {
 	self.__umbrellaRewriteErrorSink = (url, message) =>
 		events.onRewriteError?.({ url, message, top: true });
 
-	const blocker = new ContentBlockerPlugin(() => settings.get().blockAds);
-	const cache = new HttpCachePlugin();
-	const plugins = [
-		cache,
-		new UrlWatcherPlugin((url) => events.onUrl?.(url)),
-		new CatchEscapedLinksPlugin((url) => new URL(`/?go=${encodeURIComponent(url.href)}`, location.origin)),
-		blocker,
-		new ErrorPagePlugin((info) => events.onError?.(info)),
-		new RecoveryPlugin((info) => {
-			if (info.type === "page-health") events.onHealth?.(info);
-			else if (info.type === "rewrite-error") events.onRewriteError?.(info);
-		}),
-		new ShellBridgePlugin({
-			onNavigateStart: () => events.onLoading?.(true),
-			onUnloading: () => {
-				transport.abortInFlight?.();
-				events.onLoading?.(true);
+	const tabs = new Set();
+
+	function createTab(iframe, tabEvents = {}) {
+		const blocker = new ContentBlockerPlugin(() => settings.get().blockAds);
+		const cache = new HttpCachePlugin();
+		const perFrame = frameTransport(() => transport);
+		const plugins = [
+			cache,
+			new UrlWatcherPlugin((url) => tabEvents.onUrl?.(url)),
+			new CatchEscapedLinksPlugin((url) => new URL(`/?go=${encodeURIComponent(url.href)}`, location.origin)),
+			blocker,
+			new ErrorPagePlugin((info) => tabEvents.onError?.(info)),
+			new RecoveryPlugin((info) => {
+				if (info.type === "page-health") tabEvents.onHealth?.(info);
+				else if (info.type === "rewrite-error") events.onRewriteError?.(info);
+			}),
+			new ShellBridgePlugin({
+				onNavigateStart: () => tabEvents.onLoading?.(true),
+				onUnloading: () => {
+					perFrame.abortInFlight();
+					tabEvents.onLoading?.(true);
+				},
+				onLoaded: () => tabEvents.onLoading?.(false),
+				onTitle: (t) => tabEvents.onTitle?.(t),
+				onIcon: (u) => u && tabEvents.onIcon?.(u),
+				onOpen: (u, opts) => tabEvents.onOpen?.(u, opts),
+			}),
+		];
+		const frame = controller.createFrame(iframe, { plugins });
+		frame.fetchHandler.client.transport = perFrame;
+		const onLoad = () => tabEvents.onLoading?.(false);
+		iframe.addEventListener("load", onLoad);
+
+		const tab = {
+			frame,
+			cache,
+			blocker,
+			perFrame,
+			go(url) {
+				tabEvents.onLoading?.(true);
+				frame.go(url);
 			},
-			onLoaded: () => events.onLoading?.(false),
-			onTitle: (t) => events.onTitle?.(t),
-		}),
-	];
-	const frame = controller.createFrame(iframe, { plugins });
-	iframe.addEventListener("load", () => events.onLoading?.(false));
+			back: () => frame.back(),
+			forward: () => frame.forward(),
+			reload() {
+				tabEvents.onLoading?.(true);
+				frame.reload();
+			},
+			blank() {
+				perFrame.abortInFlight();
+				try {
+					iframe.src = "about:blank";
+				} catch {
+				}
+			},
+			destroy() {
+				perFrame.abortInFlight();
+				iframe.removeEventListener("load", onLoad);
+				try {
+					iframe.src = "about:blank";
+				} catch {
+				}
+				iframe.remove();
+				const i = controller.frames.indexOf(frame);
+				if (i !== -1) controller.frames.splice(i, 1);
+				tabs.delete(tab);
+			},
+		};
+		tabs.add(tab);
+		return tab;
+	}
 
 	function syncConfig() {
 		const next = buildScramjetConfig();
@@ -216,26 +344,20 @@ export async function createEngine(iframe, events = {}, onStatus) {
 
 	return {
 		controller,
-		frame,
-		cache,
-		blocker,
+		createTab,
 		get transportKind() {
 			return transport.umbrellaKind;
 		},
-		go(url) {
-			events.onLoading?.(true);
-			frame.go(url);
-		},
-		back: () => frame.back(),
-		forward: () => frame.forward(),
-		reload() {
-			events.onLoading?.(true);
-			frame.reload();
+		get blocked() {
+			let n = 0;
+			for (const t of tabs) n += t.blocker.blocked;
+			return n;
 		},
 		async setTransport(kind) {
 			const next = await createTransport(kind);
 			controller.setTransport(next);
 			transport = next;
+			for (const t of tabs) t.frame.fetchHandler.client.transport = t.perFrame;
 			settings.set({ transport: kind });
 			return kind;
 		},
@@ -250,8 +372,10 @@ export async function createEngine(iframe, events = {}, onStatus) {
 		diag() {
 			return self.__umbrellaDiag;
 		},
+		fetchIcon: (url) => fetchIconWith(transport, url),
 		async clearData() {
-			await cache.bust();
+			for (const t of tabs) await t.cache.bust();
+			if (!tabs.size) await new HttpCachePlugin().bust();
 			controller.cookieJar.clear();
 			await controller.persistCookies();
 			await new Promise((resolve) => {

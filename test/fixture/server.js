@@ -16,6 +16,7 @@ const TYPES = {
 	".mjs": "text/javascript",
 	".webm": "audio/webm",
 	".wav": "audio/wav",
+	".svg": "image/svg+xml",
 };
 
 // 3 seconds of a 440hz sine as 16 bit mono pcm wav, built once

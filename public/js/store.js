@@ -41,6 +41,7 @@ const DEFAULT_SETTINGS = {
 	blockAds: true,
 	rewriterLogs: false,
 	compatSites: [],
+	sidebarCollapsed: false,
 };
 
 const listeners = new Set();
@@ -113,5 +114,33 @@ export const history = {
 	},
 	clear() {
 		write("history", []);
+	},
+};
+
+export const session = {
+	load() {
+		return read("tabs", null);
+	},
+	save(data) {
+		write("tabs", data);
+	},
+};
+
+const ICON_LIMIT = 150;
+
+export const icons = {
+	all() {
+		return read("icons", {});
+	},
+	get(host) {
+		return this.all()[host] ?? null;
+	},
+	set(host, src, data) {
+		const map = this.all();
+		delete map[host];
+		map[host] = { src, data };
+		const keys = Object.keys(map);
+		for (const k of keys.slice(0, Math.max(0, keys.length - ICON_LIMIT))) delete map[k];
+		write("icons", map);
 	},
 };

@@ -1,0 +1,62 @@
+Umbrella
+Copyright (C) 2026 midnight (https://github.com/devmidnightst)
+
+This program is free software: you can redistribute it and/or modify it
+under the terms of the GNU Affero General Public License version 3, as
+published by the Free Software Foundation, with the additional terms below.
+The full license text is in the LICENSE file.
+
+This program is distributed in the hope that it will be useful, but WITHOUT
+ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
+FOR A PARTICULAR PURPOSE. See the GNU Affero General Public License for more
+details.
+
+
+ADDITIONAL TERMS (section 7 of the GNU Affero General Public License v3)
+
+These terms apply to every part of this program written by midnight. They are
+added under section 7(b) and 7(c) of the license, so anyone who receives the
+program is bound by them and may not remove them.
+
+1. Credit on the front page (section 7(b)).
+   If you convey this program or a modified version of it, or run it so that
+   users interact with it over a network, the page users see first (the home
+   page, "/") must show this credit notice:
+
+       Umbrella by midnight
+
+   For a modified or renamed version, it may read "based on Umbrella by
+   midnight" instead. The notice must:
+
+   a. sit in its own box or panel, set apart from the content around it;
+   b. link to https://github.com/devmidnightst/nocturne-engine;
+   c. use text at least as large as the page's normal body text;
+   d. be visible without scrolling on a desktop sized screen; and
+   e. not be hidden, covered, faded out, shrunk, or removed by styles,
+      scripts, or any other means.
+
+2. Credit in the about section and in this file (section 7(b)).
+   The credit "Umbrella by midnight", with the same link, must also stay in
+   the program's about section, and this NOTICE file must be kept with every
+   copy of the source code.
+
+3. Marking modified versions (section 7(c)).
+   A modified version must not claim to be the original Umbrella or to be
+   made or endorsed by midnight. If you change it, say so, for example in
+   the about section and in the credit notice ("based on Umbrella by
+   midnight").
+
+Breaking these terms breaks the license, and under section 8 your rights to
+use, modify and share the program end.
+
+
+THIRD PARTY PARTS
+
+Umbrella ships with and depends on software by other people. Those parts keep
+their own licenses and the terms above do not apply to them:
+
+- Scramjet, scramjet-controller, scramjet-utils, epoxy-tls and
+  libcurl-transport by Mercury Workshop: GNU AGPL v3
+- wisp-js by Mercury Workshop: GNU LGPL v3
+- proxy-transports by Mercury Workshop: MIT
+- the umbrella icon from Lucide (https://lucide.dev): ISC

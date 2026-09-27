@@ -156,6 +156,43 @@ export class RecoveryPlugin extends ManagedPlugin {
 	}
 }
 
+function realUrl(frame, href, base) {
+	try {
+		const url = new URL(href, base);
+		if (url.origin === location.origin && url.pathname.startsWith(frame.prefix)) {
+			return new URL(frame.controller.config.codec.decode(url.pathname.slice(frame.prefix.length) + url.search)).href;
+		}
+		return /^https?:$/.test(url.protocol) ? url.href : null;
+	} catch {
+		return null;
+	}
+}
+
+function findIcon(frame, doc, pageUrl) {
+	try {
+		const page = new URL(pageUrl);
+		if (!/^https?:$/.test(page.protocol)) return null;
+		let href = null;
+		try {
+			const link = doc.querySelector('link[rel~="icon" i]');
+			href = link?.getAttribute("href") || null;
+		} catch {
+		}
+		if (!href) return new URL("/favicon.ico", page).href;
+		if (href.startsWith("data:image/")) return href;
+		return realUrl(frame, href, page);
+	} catch {
+		return null;
+	}
+}
+
+function linkTarget(e) {
+	for (const node of e.composedPath?.() ?? []) {
+		if (node?.tagName === "A" || node?.tagName === "AREA") return node.hasAttribute("href") ? node : null;
+	}
+	return null;
+}
+
 export class ShellBridgePlugin extends ManagedPlugin {
 	constructor(events) {
 		super("umbrella-shell-bridge", []);
@@ -173,10 +210,30 @@ export class ShellBridgePlugin extends ManagedPlugin {
 					win.addEventListener(type, fn);
 				}
 			};
+			const openLink = (e, background) => {
+				if (e.defaultPrevented || !this.events.onOpen) return;
+				const a = linkTarget(e);
+				if (!a || a.hasAttribute("download")) return;
+				const url = realUrl(frame, a.getAttribute("href"), client.url.href);
+				if (!url) return;
+				e.preventDefault();
+				this.events.onOpen(url, { background });
+			};
+			add("click", (e) => {
+				if (e.button !== 0 || e.altKey) return;
+				const a = linkTarget(e);
+				if (!a) return;
+				if (e.ctrlKey || e.metaKey) return openLink(e, !e.shiftKey);
+				if (e.shiftKey || (a.target || "").toLowerCase() === "_blank") openLink(e, false);
+			});
+			add("auxclick", (e) => {
+				if (e.button === 1) openLink(e, !e.shiftKey);
+			});
 			this.events.onNavigateStart?.(client.url.href);
 			add("DOMContentLoaded", () => this.events.onTitle?.(win.document.title));
 			add("load", () => {
 				this.events.onTitle?.(win.document.title);
+				this.events.onIcon?.(findIcon(frame, win.document, client.url.href));
 				this.events.onLoaded?.(client.url.href);
 			});
 			add("beforeunload", () => this.events.onUnloading?.());

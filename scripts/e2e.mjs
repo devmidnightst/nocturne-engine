@@ -117,7 +117,7 @@ async function runMedia(transport) {
 	try {
 		await waitDone(page, () => {
 			try {
-				return document.getElementById("frame").contentDocument?.title === "media done";
+				return document.getElementById("frame")?.contentDocument?.title === "media done";
 			} catch {
 				return false;
 			}
@@ -146,7 +146,7 @@ async function runLoneSend(transport) {
 		await page.waitForFunction(
 			() => {
 				try {
-					return document.getElementById("frame").contentDocument?.title?.startsWith("lone ");
+					return document.getElementById("frame")?.contentDocument?.title?.startsWith("lone ");
 				} catch {
 					return false;
 				}
@@ -169,7 +169,7 @@ async function runLoneSend(transport) {
 async function runIdleReuse(transport, { knownBroken = false } = {}) {
 	const { context, page } = await newShell(transport);
 	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "child.html")}`);
-	await page.waitForFunction(() => document.getElementById("frame").contentDocument?.body?.innerText?.includes("child"), null, { timeout: 30_000 });
+	await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.body?.innerText?.includes("child"), null, { timeout: 30_000 });
 	const frame = proxyFrame(page);
 	await frame.evaluate(() => fetch("/api/echo?warm=1").then((r) => r.text()));
 	await page.waitForTimeout(7000);
@@ -193,12 +193,12 @@ async function runIdleReuse(transport, { knownBroken = false } = {}) {
 async function runAbandoned(transport) {
 	const { context, page } = await newShell(transport);
 	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "hang.html")}`);
-	await page.waitForFunction(() => document.getElementById("frame").contentDocument?.title === "hang", null, { timeout: 30_000 });
+	await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.title === "hang", null, { timeout: 30_000 });
 	await page.waitForTimeout(1000);
 	await page.fill("#address", fixtureUrl + "soak-heavy.html");
 	await page.press("#address", "Enter");
 	try {
-		await page.waitForFunction(() => document.getElementById("frame").contentDocument?.title === "heavy done", null, { timeout: 20_000 });
+		await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.title === "heavy done", null, { timeout: 20_000 });
 		const res = JSON.parse(await proxyFrame(page).innerText("#results"));
 		res.bad === 0 ? pass(`page after abandoned requests loads over ${transport}`) : fail(`page after abandoned requests over ${transport}: ${JSON.stringify(res)}`);
 	} catch {
@@ -213,7 +213,7 @@ async function runErrorPage() {
 	await page.goto(`${base}/?go=${encodeURIComponent("http://umbrella-does-not-exist.invalid/")}`);
 	try {
 		await page.waitForFunction(
-			() => document.getElementById("frame").contentDocument?.title?.includes("Umbrella"),
+			() => document.getElementById("frame")?.contentDocument?.title?.includes("Umbrella"),
 			null,
 			{ timeout: 30_000 }
 		);
@@ -228,8 +228,8 @@ async function runErrorPage() {
 async function runShell() {
 	console.log("\nshell");
 	const { context, page } = await newShell("libcurl");
-	const frameText = () => page.evaluate(() => document.getElementById("frame").contentDocument?.body?.innerText ?? "");
-	const waitChild = () => page.waitForFunction(() => document.getElementById("frame").contentDocument?.body?.innerText?.includes("child"), null, { timeout: 30_000 });
+	const frameText = () => page.evaluate(() => document.getElementById("frame")?.contentDocument?.body?.innerText ?? "");
+	const waitChild = () => page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.body?.innerText?.includes("child"), null, { timeout: 30_000 });
 	const go = async (url) => {
 		await page.fill("#address", url);
 		await page.press("#address", "Enter");
@@ -269,10 +269,66 @@ async function runShell() {
 
 		await page.evaluate(() => (document.getElementById("frame").src = "/"));
 		await page.waitForTimeout(3000);
-		const nested = await page.evaluate(() => !!document.getElementById("frame").contentDocument?.getElementById("address"));
+		const nested = await page.evaluate(() => !!document.getElementById("frame")?.contentDocument?.getElementById("address"));
 		!nested && page.frames().length === 2 ? pass("the shell never shows up inside its own frame") : fail("the shell loaded inside its own frame (two address bars)");
 	} catch (err) {
 		fail(`shell checks: ${err.message}`);
+	}
+	await context.close();
+}
+
+// side tabs: every tab keeps its own live frame, links that want a new tab
+// land in the sidebar instead of a new browser tab, and a reload brings back
+// every tab.
+async function runTabs() {
+	console.log("\ntabs");
+	const { context, page } = await newShell("libcurl");
+	const rows = () =>
+		page.$$eval(".tab-row", (r) => r.map((x) => ({ url: x.title, active: x.classList.contains("active") })));
+	const tabFrame = () => page.frames().find((f) => f.parentFrame() === page.mainFrame() && f.url().includes("tab.html"));
+	const waitRows = (n) => page.waitForFunction((n) => document.querySelectorAll(".tab-row").length === n, n, { timeout: 15_000 });
+	try {
+		await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "tab.html")}`);
+		await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.title === "tab fixture", null, { timeout: 30_000 });
+		try {
+			await page.waitForSelector(".tab-row.active .fav img", { timeout: 10_000 });
+			pass("the tab shows the site's own icon");
+		} catch {
+			fail("the tab never showed the site's icon");
+		}
+
+		await tabFrame().evaluate(() => (window.__alive = true));
+		await tabFrame().click("#blank");
+		await waitRows(2);
+		const afterBlank = await rows();
+		afterBlank[1]?.url === fixtureUrl + "child.html?from-blank" && afterBlank[1].active && context.pages().length === 1
+			? pass("a target=_blank link opens a sidebar tab, not a browser tab")
+			: fail(`target=_blank link: ${JSON.stringify(afterBlank)}, ${context.pages().length} browser tabs`);
+
+		await page.click(".tab-row >> nth=0");
+		const alive = await page.evaluate(() => document.getElementById("frame")?.contentWindow?.__alive === true);
+		alive ? pass("switching tabs keeps the page alive (no reload)") : fail("switching back reloaded the page");
+
+		await tabFrame().click("#plain", { button: "middle" });
+		await waitRows(3);
+		const afterMiddle = await rows();
+		afterMiddle[0].active && afterMiddle[2]?.url === fixtureUrl + "child.html?from-middle"
+			? pass("middle click opens a background tab after the other one")
+			: fail(`middle click: ${JSON.stringify(afterMiddle)}`);
+
+		await page.reload();
+		await page.waitForSelector("#boot", { state: "hidden", timeout: 30_000 });
+		await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.title === "tab fixture", null, { timeout: 30_000 });
+		const restored = await rows();
+		restored.length === 3 && restored[0].active && restored[2].url === fixtureUrl + "child.html?from-middle"
+			? pass("a reload brings back every tab and the active one")
+			: fail(`reload restored ${JSON.stringify(restored)}`);
+
+		await page.keyboard.press("Alt+w");
+		await waitRows(2);
+		pass("alt+w closes the current tab");
+	} catch (err) {
+		fail(`tab checks: ${err.message}`);
 	}
 	await context.close();
 }
@@ -281,7 +337,7 @@ async function runBlocker() {
 	console.log("\ncontent blocker");
 	const { context, page } = await newShell("epoxy");
 	await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "child.html")}`);
-	await page.waitForFunction(() => document.getElementById("frame").contentDocument?.body?.innerText?.includes("child"), null, { timeout: 30_000 });
+	await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.body?.innerText?.includes("child"), null, { timeout: 30_000 });
 	const res = await proxyFrame(page).evaluate(async () => {
 		const t = Date.now();
 		const r = await fetch("https://securepubads.g.doubleclick.net/tag/js/gpt.js");
@@ -329,6 +385,7 @@ try {
 	await runAbandoned("epoxy");
 	await runErrorPage();
 	await runShell();
+	await runTabs();
 	await runBlocker();
 	await runRealSites();
 } finally {
