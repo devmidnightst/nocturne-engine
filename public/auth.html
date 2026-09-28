@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#efeff1" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#151517" media="(prefers-color-scheme: dark)" />
+  <meta name="color-scheme" content="light dark" />
+  <title>Umbrella</title>
+  <link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
+  <link rel="stylesheet" href="/css/umbrella.css" />
+  <link rel="stylesheet" href="/css/auth.css" />
+</head>
+<body>
+  <div class="auth-page">
+    <div class="auth-card" id="auth-card">
+      <a href="/" class="auth-logo">
+        <img src="/img/logo.svg" alt="" width="36" height="36" />
+        <span>Umbrella</span>
+      </a>
+
+      <div class="auth-view" id="login-view">
+        <h2>log in</h2>
+        <form id="login-form" autocomplete="on">
+          <label>
+            <span>username or email</span>
+            <input type="text" name="username" required autocomplete="username" spellcheck="false" />
+          </label>
+          <label>
+            <span>password</span>
+            <input type="password" name="password" required autocomplete="current-password" />
+          </label>
+          <button type="submit" class="auth-btn">log in</button>
+          <div class="auth-error" id="login-error"></div>
+        </form>
+        <div class="auth-links">
+          <button type="button" class="link-btn" data-goto="signup">don't have an account? sign up</button>
+          <button type="button" class="link-btn" data-goto="forgot">forgot password?</button>
+        </div>
+      </div>
+
+      <div class="auth-view" id="signup-view" hidden>
+        <h2>sign up</h2>
+        <form id="signup-form" autocomplete="on">
+          <label>
+            <span>username</span>
+            <input type="text" name="username" required autocomplete="username" spellcheck="false" pattern="[a-zA-Z0-9_]{3,24}" />
+            <small>3-24 chars, letters, numbers, underscores</small>
+          </label>
+          <label>
+            <span>email</span>
+            <input type="email" name="email" required autocomplete="email" spellcheck="false" />
+          </label>
+          <label>
+            <span>password</span>
+            <input type="password" name="password" required minlength="8" autocomplete="new-password" />
+            <small>at least 8 characters</small>
+          </label>
+          <label>
+            <span>confirm password</span>
+            <input type="password" name="confirm" required minlength="8" autocomplete="new-password" />
+          </label>
+          <button type="submit" class="auth-btn">create account</button>
+          <div class="auth-error" id="signup-error"></div>
+        </form>
+        <div class="auth-links">
+          <button type="button" class="link-btn" data-goto="login">already have an account? log in</button>
+        </div>
+      </div>
+
+      <div class="auth-view" id="forgot-view" hidden>
+        <h2>reset password</h2>
+        <form id="forgot-form">
+          <label>
+            <span>email</span>
+            <input type="email" name="email" required autocomplete="email" spellcheck="false" />
+          </label>
+          <button type="submit" class="auth-btn">send reset link</button>
+          <div class="auth-error" id="forgot-error"></div>
+          <div class="auth-success" id="forgot-success"></div>
+        </form>
+        <div class="auth-links">
+          <button type="button" class="link-btn" data-goto="login">back to login</button>
+        </div>
+      </div>
+
+      <div class="auth-view" id="reset-view" hidden>
+        <h2>new password</h2>
+        <form id="reset-form">
+          <label>
+            <span>new password</span>
+            <input type="password" name="password" required minlength="8" autocomplete="new-password" />
+          </label>
+          <label>
+            <span>confirm password</span>
+            <input type="password" name="confirm" required minlength="8" autocomplete="new-password" />
+          </label>
+          <button type="submit" class="auth-btn">reset password</button>
+          <div class="auth-error" id="reset-error"></div>
+          <div class="auth-success" id="reset-success"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+  <script type="module" src="/js/auth.js"></script>
+</body>
+</html>
