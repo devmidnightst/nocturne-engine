@@ -6,6 +6,7 @@ import {
 	ShellBridgePlugin,
 } from "./plugins/umbrella-plugins.js";
 import { CaptchaPlugin } from "./plugins/captcha-plugin.js";
+import { CloakPlugin } from "./plugins/cloak-plugin.js";
 
 const _nc_ctrl = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
 const _nc_core = globalThis[atob("JHNjcmFtamV0")];
@@ -278,8 +279,10 @@ export async function createEngine(events = {}, onStatus) {
 	await controller.wait();
 	followServiceWorker(controller, reg);
 
-	self.__nc_s8f3 = (url, message) =>
-		events.onRewriteError?.({ url, message, top: true });
+	Object.defineProperty(self, "__nc_s8f3", {
+		value: (url, message) => events.onRewriteError?.({ url, message, top: true }),
+		enumerable: false, configurable: true, writable: true,
+	});
 
 	const tabs = new Set();
 
@@ -288,6 +291,7 @@ export async function createEngine(events = {}, onStatus) {
 		const cache = new HttpCachePlugin();
 		const perFrame = frameTransport(() => transport);
 		const plugins = [
+			new CloakPlugin(),
 			cache,
 			new UrlWatcherPlugin((url) => tabEvents.onUrl?.(url)),
 			new CatchEscapedLinksPlugin((url) => new URL(`/?go=${encodeURIComponent(url.href)}`, location.origin)),

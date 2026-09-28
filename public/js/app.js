@@ -979,13 +979,13 @@ window.addEventListener("pagehide", () => {
 	if (saveTimer) writeSession();
 });
 
-window.__nc_a3c8 = (frameEl, go) => {
+Object.defineProperty(window, "__nc_a3c8", { value: (frameEl, go) => {
 	const tab = tabs.find((t) => t.iframe && t.iframe === frameEl);
 	if (!tab || !engine) return false;
 	const target = go ? resolveInput(go) : null;
 	setTimeout(() => (target ? navigate(target, { tab }) : showHome(tab)));
 	return true;
-};
+}, enumerable: false, configurable: true });
 
 function cleanAddressBar() {
 	if (location.pathname + location.search + location.hash !== "/") window.history.replaceState(null, "", "/");

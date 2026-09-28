@@ -38,54 +38,64 @@ function extractSitekey(doc, type) {
 
 function createOverlay(win, doc, info) {
 	const overlay = doc.createElement("div");
-	overlay.id = "__umbrella_captcha_overlay";
-
-	const styles = doc.createElement("style");
-	styles.textContent = [
-		"#__umbrella_captcha_overlay{position:fixed;bottom:20px;right:20px;z-index:2147483647;font-family:-apple-system,system-ui,sans-serif;max-width:340px}",
-		".__uc_card{background:#1a1a2e;color:#e0e0e0;border:1px solid #333;border-radius:12px;padding:16px;box-shadow:0 8px 32px rgba(0,0,0,.4)}",
-		".__uc_title{font-size:14px;font-weight:600;margin:0 0 8px;color:#fff;display:flex;align-items:center;gap:8px}",
-		".__uc_badge{background:#ff6b35;color:#fff;font-size:10px;padding:2px 6px;border-radius:4px;text-transform:uppercase;font-weight:700}",
-		".__uc_text{font-size:12px;color:#aaa;margin:0 0 12px;line-height:1.5}",
-		".__uc_actions{display:flex;gap:8px;flex-wrap:wrap}",
-		".__uc_btn{border:none;border-radius:8px;padding:8px 14px;font-size:12px;font-weight:600;cursor:pointer;transition:opacity .15s}",
-		".__uc_btn:hover{opacity:.85}",
-		".__uc_btn--primary{background:#6c5ce7;color:#fff}",
-		".__uc_btn--secondary{background:#2d2d44;color:#ccc;border:1px solid #444}",
-		".__uc_btn--close{position:absolute;top:8px;right:10px;background:none;border:none;color:#666;font-size:18px;cursor:pointer;padding:4px}",
-		".__uc_status{font-size:11px;color:#888;margin-top:8px;min-height:16px}",
-	].join("\n");
+	Object.assign(overlay.style, {
+		position: "fixed", bottom: "20px", right: "20px", zIndex: "2147483647",
+		fontFamily: "-apple-system,system-ui,sans-serif", maxWidth: "340px",
+	});
 
 	const card = doc.createElement("div");
-	card.className = "__uc_card";
-	card.style.position = "relative";
+	Object.assign(card.style, {
+		background: "#1a1a2e", color: "#e0e0e0", border: "1px solid #333",
+		borderRadius: "12px", padding: "16px", boxShadow: "0 8px 32px rgba(0,0,0,.4)",
+		position: "relative",
+	});
 
 	const closeBtn = doc.createElement("button");
-	closeBtn.className = "__uc_btn--close";
+	Object.assign(closeBtn.style, {
+		position: "absolute", top: "8px", right: "10px", background: "none",
+		border: "none", color: "#666", fontSize: "18px", cursor: "pointer", padding: "4px",
+	});
 	closeBtn.textContent = "×";
 	closeBtn.onclick = () => overlay.remove();
 
 	const title = doc.createElement("div");
-	title.className = "__uc_title";
+	Object.assign(title.style, {
+		fontSize: "14px", fontWeight: "600", margin: "0 0 8px", color: "#fff",
+		display: "flex", alignItems: "center", gap: "8px",
+	});
 	const badge = doc.createElement("span");
-	badge.className = "__uc_badge";
+	Object.assign(badge.style, {
+		background: "#ff6b35", color: "#fff", fontSize: "10px", padding: "2px 6px",
+		borderRadius: "4px", textTransform: "uppercase", fontWeight: "700",
+	});
 	badge.textContent = info.type;
 	title.textContent = "captcha detected ";
 	title.appendChild(badge);
 
 	const text = doc.createElement("p");
-	text.className = "__uc_text";
-	text.textContent = "this page uses a captcha that may not work through the proxy. you can try auto-solving or open the original page.";
+	Object.assign(text.style, {
+		fontSize: "12px", color: "#aaa", margin: "0 0 12px", lineHeight: "1.5",
+	});
+	text.textContent = "this page uses a captcha that may not work through the proxy. you can try auto-solving.";
 
 	const actions = doc.createElement("div");
-	actions.className = "__uc_actions";
+	Object.assign(actions.style, { display: "flex", gap: "8px", flexWrap: "wrap" });
 
 	const status = doc.createElement("div");
-	status.className = "__uc_status";
+	Object.assign(status.style, {
+		fontSize: "11px", color: "#888", marginTop: "8px", minHeight: "16px",
+	});
+
+	const btnBase = {
+		border: "none", borderRadius: "8px", padding: "8px 14px",
+		fontSize: "12px", fontWeight: "600", cursor: "pointer",
+	};
 
 	const solveBtn = doc.createElement("button");
-	solveBtn.className = "__uc_btn __uc_btn--primary";
+	Object.assign(solveBtn.style, { ...btnBase, background: "#6c5ce7", color: "#fff" });
 	solveBtn.textContent = "try auto-solve";
+	solveBtn.onmouseenter = () => { solveBtn.style.opacity = "0.85"; };
+	solveBtn.onmouseleave = () => { solveBtn.style.opacity = "1"; };
 	solveBtn.onclick = async () => {
 		solveBtn.disabled = true;
 		status.textContent = "checking solver...";
@@ -114,21 +124,18 @@ function createOverlay(win, doc, info) {
 		}
 	};
 
-	const openBtn = doc.createElement("button");
-	openBtn.className = "__uc_btn __uc_btn--secondary";
-	openBtn.textContent = "open original";
-	openBtn.onclick = () => {
-		win.open(info.pageurl, "_blank");
-	};
-
 	const dismissBtn = doc.createElement("button");
-	dismissBtn.className = "__uc_btn __uc_btn--secondary";
+	Object.assign(dismissBtn.style, {
+		...btnBase, background: "#2d2d44", color: "#ccc", border: "1px solid #444",
+	});
 	dismissBtn.textContent = "dismiss";
+	dismissBtn.onmouseenter = () => { dismissBtn.style.opacity = "0.85"; };
+	dismissBtn.onmouseleave = () => { dismissBtn.style.opacity = "1"; };
 	dismissBtn.onclick = () => overlay.remove();
 
-	actions.append(solveBtn, openBtn, dismissBtn);
+	actions.append(solveBtn, dismissBtn);
 	card.append(closeBtn, title, text, actions, status);
-	overlay.append(styles, card);
+	overlay.appendChild(card);
 	return overlay;
 }
 

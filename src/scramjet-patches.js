@@ -87,9 +87,19 @@ if (!self.__nc_d7f2) {
 		enumerable: false, configurable: true, writable: true,
 	});
 }
+(function() {
+	var _h = ["__nc_g3a1","__nc_m2b8","__nc_i5c4","__nc_f6d9","__nc_r7e2","__nc_d7f2","__nc_s8f3"];
+	for (var _i = 0; _i < _h.length; _i++) {
+		try {
+			var _d = Object.getOwnPropertyDescriptor(self, _h[_i]);
+			if (_d && _d.enumerable) Object.defineProperty(self, _h[_i], { enumerable: false });
+		} catch(e) {}
+	}
+})();
 `;
 
-// appended to the bundle: alias the shortened helper names from __umbrellaFixGlue.
+// appended to the bundle: alias the shortened helper names from __umbrellaFixGlue,
+// then cloak all scramjet globals so detection scripts cannot enumerate them.
 const EPILOGUE = `
 ;(function () {
 	try {
@@ -107,6 +117,21 @@ const EPILOGUE = `
 				configurable: true,
 			});
 		});
+		Object.keys(g).forEach(function (key) {
+			var name = g[key];
+			if (typeof name !== "string") return;
+			try {
+				var d = Object.getOwnPropertyDescriptor(self, name);
+				if (d && d.enumerable) Object.defineProperty(self, name, { enumerable: false });
+			} catch (x) {}
+		});
+		var _sc = [atob("JHNjcmFtamV0"), atob("JHNjcmFtamV0Q29udHJvbGxlcg=="), atob("JHNjcmFtamV0VXRpbHM=")];
+		for (var _si = 0; _si < _sc.length; _si++) {
+			try {
+				var _sd = Object.getOwnPropertyDescriptor(self, _sc[_si]);
+				if (_sd && _sd.enumerable) Object.defineProperty(self, _sc[_si], { enumerable: false });
+			} catch (x) {}
+		}
 	} catch (e) {}
 })();
 `;
