@@ -7,6 +7,7 @@
 import http from "node:http";
 import path from "node:path";
 import express from "express";
+import cookieParser from "cookie-parser";
 import { logging as wispLogging } from "@mercuryworkshop/wisp-js/server";
 
 import { config, ROOT } from "./config.js";
@@ -22,6 +23,8 @@ import { createDomainAllowlist } from "./domains.js";
 import { createDiagnoseHandler } from "./diagnose.js";
 import { packageDir as pkgDir } from "./packages.js";
 import { createWispHandler } from "./wisp.js";
+import { createAuthRouter, authMiddleware } from "./auth.js";
+import { createCaptchaRouter } from "./captcha.js";
 
 const DIST = {
 	scramjet: scramjetDistDir(),
@@ -68,6 +71,9 @@ const domains = createDomainAllowlist(config.domains);
 // headers for the shell itself. deliberately no x-frame-options / coep here:
 // the proxied pages are served by the service worker, not by this server, and
 // scramjet strips site csp on its own. these only harden the shell.
+app.use(cookieParser());
+app.use(authMiddleware);
+
 app.use((req, res, next) => {
 	res.setHeader("X-Content-Type-Options", "nosniff");
 	res.setHeader("Referrer-Policy", "same-origin");
@@ -121,6 +127,11 @@ app.get("/sw.js", (req, res) => {
 	res.setHeader("Content-Type", "text/javascript; charset=utf-8");
 	res.sendFile(path.join(PUBLIC, "sw.js"));
 });
+
+// ---- auth ----
+
+app.use("/api/auth", createAuthRouter());
+app.use("/api/captcha", createCaptchaRouter());
 
 // ---- api ----
 

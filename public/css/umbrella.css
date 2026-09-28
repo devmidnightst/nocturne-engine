@@ -1097,13 +1097,68 @@ body.collapsed.peek .sidebar {
 
 .games-body {
 	padding: 0;
+	overflow-y: auto;
 }
 
 .games-body #games {
 	width: 100%;
-	height: 100%;
-	min-height: 0;
+	min-height: min-content;
+	padding: 12px;
+}
+
+.games-body #games iframe {
+	border-radius: 8px;
+	border: 1px solid var(--line);
+}
+
+.game-fullscreen-bar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	padding: 8px 12px;
+	background: var(--chrome);
+	border-bottom: 1px solid var(--line);
+	position: sticky;
+	top: 0;
+	z-index: 5;
+}
+
+.game-fullscreen-bar span {
+	font-size: 13px;
+	font-weight: 500;
+}
+
+.game-fullscreen-bar button {
+	padding: 4px 10px;
+	border: 1px solid var(--line);
+	border-radius: 6px;
+	background: var(--surface);
+	cursor: pointer;
+	font-size: 12px;
+}
+
+.game-fullscreen-bar button:hover {
+	background: var(--hover);
+}
+
+.game-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 50;
+	background: var(--chrome);
+	display: flex;
+	flex-direction: column;
+}
+
+.game-overlay .game-fullscreen-bar {
+	flex-shrink: 0;
+	position: static;
+}
+
+.game-overlay iframe {
 	flex: 1;
+	width: 100%;
+	border: none;
 }
 
 .toast {

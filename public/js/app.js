@@ -610,7 +610,7 @@ function closePanel() {
 	setTimeout(() => (ui.panel.hidden = true), 200);
 }
 
-const tabOrder = ["settings", "history", "bookmarks", "games", "about"];
+const tabOrder = ["settings", "history", "bookmarks", "games", "account", "about"];
 const tabIndicator = $("tab-indicator");
 
 function moveIndicator(btn) {
@@ -643,6 +643,7 @@ function selectTab(tab) {
 	if (tab === "bookmarks") renderPanelBookmarks();
 	if (tab === "settings") renderSettings();
 	if (tab === "about") renderAbout();
+	if (tab === "account") renderAccount();
 	if (tab === "games") initGames();
 }
 
@@ -652,6 +653,45 @@ function initGames() {
 	if (typeof Lumin === "undefined") return;
 	Lumin.init({ container: "#games", theme: "dark" });
 	gamesReady = true;
+	observeGameIframes();
+}
+
+function observeGameIframes() {
+	const container = $("games");
+	if (!container) return;
+	const observer = new MutationObserver(() => {
+		for (const iframe of container.querySelectorAll("iframe:not([data-fs-ready])")) {
+			iframe.dataset.fsReady = "1";
+			iframe.setAttribute("allowfullscreen", "");
+			iframe.allow = "fullscreen; autoplay";
+			const wrap = iframe.parentElement;
+			if (!wrap) continue;
+			const btn = el("button", {
+				class: "game-fullscreen-bar",
+				style: "justify-content:flex-end;padding:4px 8px;border-bottom:none",
+				onclick: () => openGameFullscreen(iframe.src, iframe.title || "game"),
+			}, el("span", { style: "font-size:11px" }, "fullscreen"));
+			wrap.insertBefore(btn, iframe);
+		}
+	});
+	observer.observe(container, { childList: true, subtree: true });
+}
+
+function openGameFullscreen(src, title) {
+	const existing = document.querySelector(".game-overlay");
+	if (existing) existing.remove();
+	const overlay = el("div", { class: "game-overlay" },
+		el("div", { class: "game-fullscreen-bar" },
+			el("span", {}, title),
+			el("button", { onclick: () => overlay.remove() }, "exit fullscreen")
+		),
+		el("iframe", { src, allowfullscreen: "", allow: "fullscreen; autoplay" })
+	);
+	document.body.appendChild(overlay);
+	const onKey = (e) => {
+		if (e.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", onKey); }
+	};
+	document.addEventListener("keydown", onKey);
 }
 
 ui.panel.querySelector(".tabs").addEventListener("click", (e) => {
@@ -748,6 +788,106 @@ function renderAbout() {
 	$("about-versions").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
 }
 
+let currentUser = null;
+async function fetchUser() {
+	try {
+		const res = await fetch("/api/auth/me");
+		const data = await res.json();
+		currentUser = data.user;
+	} catch { currentUser = null; }
+}
+
+function renderAccount() {
+	const box = $("account-section");
+	if (!box) return;
+	if (!currentUser) {
+		box.replaceChildren(
+			el("div", { class: "account-section" },
+				el("p", { style: "color:var(--muted);font-size:14px" }, "you're not logged in"),
+				el("a", { href: "/auth.html", class: "auth-btn", style: "text-align:center;text-decoration:none;display:block;margin-top:8px" }, "log in"),
+				el("a", { href: "/auth.html?view=signup", class: "auth-btn", style: "text-align:center;text-decoration:none;display:block;margin-top:8px;background:var(--surface);color:var(--text);border:1px solid var(--line)" }, "sign up")
+			)
+		);
+		return;
+	}
+	const section = el("div", { class: "account-section" },
+		el("div", { class: "account-info" },
+			el("div", { class: "account-avatar" }, currentUser.username[0]),
+			el("div", { class: "account-details" },
+				el("span", { class: "account-name" }, currentUser.username),
+				el("span", { class: "account-email" }, currentUser.email)
+			)
+		),
+		el("div", { class: "account-actions", id: "account-actions" },
+			el("button", { onclick: () => showChangePw() }, "change password"),
+			el("button", { class: "danger", onclick: () => doLogout() }, "log out")
+		)
+	);
+	box.replaceChildren(section);
+}
+
+function showChangePw() {
+	const actions = $("account-actions");
+	if (!actions) return;
+	const errEl = el("div", { class: "auth-error" });
+	const okEl = el("div", { class: "auth-success" });
+	const form = el("form", { class: "change-pw-form" },
+		el("label", {},
+			el("span", {}, "current password"),
+			el("input", { type: "password", name: "current", required: true })
+		),
+		el("label", {},
+			el("span", {}, "new password"),
+			el("input", { type: "password", name: "password", required: true, minLength: 8 })
+		),
+		el("label", {},
+			el("span", {}, "confirm new password"),
+			el("input", { type: "password", name: "confirm", required: true, minLength: 8 })
+		),
+		el("div", { class: "change-pw-actions" },
+			el("button", { type: "submit", class: "save-pw" }, "save"),
+			el("button", { type: "button", onclick: () => renderAccount() }, "cancel")
+		),
+		errEl, okEl
+	);
+	form.addEventListener("submit", async (e) => {
+		e.preventDefault();
+		errEl.textContent = "";
+		okEl.textContent = "";
+		const fd = new FormData(form);
+		if (fd.get("password") !== fd.get("confirm")) { errEl.textContent = "passwords don't match"; return; }
+		const btn = form.querySelector(".save-pw");
+		btn.disabled = true;
+		try {
+			const res = await fetch("/api/auth/change-password", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ current: fd.get("current"), password: fd.get("password") }),
+			});
+			const data = await res.json();
+			if (!res.ok) throw new Error(data.error);
+			okEl.textContent = "password changed";
+			setTimeout(() => renderAccount(), 1200);
+		} catch (ex) {
+			errEl.textContent = ex.message;
+		} finally {
+			btn.disabled = false;
+		}
+	});
+	actions.replaceChildren(form);
+}
+
+async function doLogout() {
+	try {
+		await fetch("/api/auth/logout", { method: "POST" });
+	} catch {}
+	currentUser = null;
+	renderAccount();
+	toast("logged out");
+}
+
+fetchUser();
+
 $("set-transport").addEventListener("change", async (e) => {
 	const kind = e.target.value;
 	if (!engine || kind === engine.transportKind) return;
@@ -839,13 +979,13 @@ window.addEventListener("pagehide", () => {
 	if (saveTimer) writeSession();
 });
 
-window.__nc_a3c8 = (frameEl, go) => {
+Object.defineProperty(window, "__nc_a3c8", { value: (frameEl, go) => {
 	const tab = tabs.find((t) => t.iframe && t.iframe === frameEl);
 	if (!tab || !engine) return false;
 	const target = go ? resolveInput(go) : null;
 	setTimeout(() => (target ? navigate(target, { tab }) : showHome(tab)));
 	return true;
-};
+}, enumerable: false, configurable: true });
 
 function cleanAddressBar() {
 	if (location.pathname + location.search + location.hash !== "/") window.history.replaceState(null, "", "/");

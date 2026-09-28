@@ -10,6 +10,7 @@
 		<title>Umbrella</title>
 		<link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
 		<link rel="stylesheet" href="/css/umbrella.css" />
+		<link rel="stylesheet" href="/css/auth.css" />
 
 		<script src="/assets/r/runtime.js"></script>
 		<script src="/assets/r/api.js"></script>
@@ -148,6 +149,7 @@
 				<button role="tab" data-tab="history">history</button>
 				<button role="tab" data-tab="bookmarks">bookmarks</button>
 				<button role="tab" data-tab="games">games</button>
+				<button role="tab" data-tab="account">account</button>
 				<button role="tab" data-tab="about">about</button>
 				<button class="icon-btn small close" id="panel-close" aria-label="close">
 					<svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
@@ -205,6 +207,10 @@
 
 				<div class="tab-body games-body" data-body="games">
 					<div id="games"></div>
+				</div>
+
+				<div class="tab-body" data-body="account">
+					<div id="account-section"></div>
 				</div>
 
 				<div class="tab-body about-body" data-body="about">
