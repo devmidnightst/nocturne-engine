@@ -653,6 +653,45 @@ function initGames() {
 	if (typeof Lumin === "undefined") return;
 	Lumin.init({ container: "#games", theme: "dark" });
 	gamesReady = true;
+	observeGameIframes();
+}
+
+function observeGameIframes() {
+	const container = $("games");
+	if (!container) return;
+	const observer = new MutationObserver(() => {
+		for (const iframe of container.querySelectorAll("iframe:not([data-fs-ready])")) {
+			iframe.dataset.fsReady = "1";
+			iframe.setAttribute("allowfullscreen", "");
+			iframe.allow = "fullscreen; autoplay";
+			const wrap = iframe.parentElement;
+			if (!wrap) continue;
+			const btn = el("button", {
+				class: "game-fullscreen-bar",
+				style: "justify-content:flex-end;padding:4px 8px;border-bottom:none",
+				onclick: () => openGameFullscreen(iframe.src, iframe.title || "game"),
+			}, el("span", { style: "font-size:11px" }, "fullscreen"));
+			wrap.insertBefore(btn, iframe);
+		}
+	});
+	observer.observe(container, { childList: true, subtree: true });
+}
+
+function openGameFullscreen(src, title) {
+	const existing = document.querySelector(".game-overlay");
+	if (existing) existing.remove();
+	const overlay = el("div", { class: "game-overlay" },
+		el("div", { class: "game-fullscreen-bar" },
+			el("span", {}, title),
+			el("button", { onclick: () => overlay.remove() }, "exit fullscreen")
+		),
+		el("iframe", { src, allowfullscreen: "", allow: "fullscreen; autoplay" })
+	);
+	document.body.appendChild(overlay);
+	const onKey = (e) => {
+		if (e.key === "Escape") { overlay.remove(); document.removeEventListener("keydown", onKey); }
+	};
+	document.addEventListener("keydown", onKey);
 }
 
 ui.panel.querySelector(".tabs").addEventListener("click", (e) => {
