@@ -24,6 +24,7 @@ import { createDiagnoseHandler } from "./diagnose.js";
 import { packageDir as pkgDir } from "./packages.js";
 import { createWispHandler } from "./wisp.js";
 import { createAuthRouter, authMiddleware } from "./auth.js";
+import { createCaptchaRouter } from "./captcha.js";
 
 const DIST = {
 	scramjet: scramjetDistDir(),
@@ -130,6 +131,7 @@ app.get("/sw.js", (req, res) => {
 // ---- auth ----
 
 app.use("/api/auth", createAuthRouter());
+app.use("/api/captcha", createCaptchaRouter());
 
 // ---- api ----
 

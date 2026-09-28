@@ -5,6 +5,7 @@ import {
 	RecoveryPlugin,
 	ShellBridgePlugin,
 } from "./plugins/umbrella-plugins.js";
+import { CaptchaPlugin } from "./plugins/captcha-plugin.js";
 
 const _nc_ctrl = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
 const _nc_core = globalThis[atob("JHNjcmFtamV0")];
@@ -291,6 +292,7 @@ export async function createEngine(events = {}, onStatus) {
 			new UrlWatcherPlugin((url) => tabEvents.onUrl?.(url)),
 			new CatchEscapedLinksPlugin((url) => new URL(`/?go=${encodeURIComponent(url.href)}`, location.origin)),
 			blocker,
+			new CaptchaPlugin(),
 			new ErrorPagePlugin((info) => tabEvents.onError?.(info)),
 			new RecoveryPlugin((info) => {
 				if (info.type === "page-health") tabEvents.onHealth?.(info);
