@@ -301,11 +301,55 @@
 }
 
 .aic-greet {
-	margin: 16px 0 6px;
+	width: fit-content;
+	margin: 16px auto 6px;
 	font-size: 1.6rem;
 	font-weight: 600;
 	letter-spacing: -0.01em;
 	line-height: 1.25;
+	color: var(--a-text);
+	max-width: 100%;
+}
+
+@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+	.aic-greet {
+		background-image: linear-gradient(
+			100deg,
+			var(--a-text) 0%,
+			var(--a-text) 40%,
+			var(--a-accent) 47%,
+			color-mix(in srgb, var(--a-accent) 45%, #ffffff) 50%,
+			var(--a-accent) 53%,
+			var(--a-text) 60%,
+			var(--a-text) 100%
+		);
+		background-size: 250% 100%;
+		background-position: 100% 0;
+		-webkit-background-clip: text;
+		background-clip: text;
+		-webkit-text-fill-color: transparent;
+		color: transparent;
+	}
+
+	.aic-main.empty .aic-greet {
+		animation: aic-shine 3.6s ease-in-out infinite;
+	}
+}
+
+@keyframes aic-shine {
+	0% {
+		background-position: 100% 0;
+	}
+	65%,
+	100% {
+		background-position: 0% 0;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	.aic-main.empty .aic-greet {
+		animation: none;
+	}
 }
 
 .aic-sub {
