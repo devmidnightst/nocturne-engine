@@ -43,13 +43,16 @@ const fail = (m) => {
 
 async function newShell(transport) {
 	const context = await browser.newContext();
-	await context.addInitScript((t) => {
-		localStorage.setItem("umbrella:settings", JSON.stringify({ transport: t, blockAds: true }));
-	}, transport);
+	await context.addInitScript(
+		([t, wisp]) => {
+			localStorage.setItem("_p8q2:settings", JSON.stringify({ _m: t === "libcurl" ? "lc" : "ep", _srvUrl: wisp, blockAds: true }));
+		},
+		[transport, base.replace("http", "ws") + "/wisp/"]
+	);
 	const extraCa = process.env.UMBRELLA_E2E_EXTRA_CA || process.env.NOCTURNE_E2E_EXTRA_CA;
 	if (extraCa) {
 		const pem = fs.readFileSync(extraCa, "utf8");
-		await context.route("**/transports/epoxy.mjs", async (route) => {
+		await context.route("**/assets/r/transport.alt.mjs", async (route) => {
 			const res = await route.fetch();
 			const body = (await res.text()).replace(
 				"this.client = new EpoxyClient(this.wisp, options);",
@@ -213,14 +216,17 @@ async function runErrorPage() {
 	await page.goto(`${base}/?go=${encodeURIComponent("http://umbrella-does-not-exist.invalid/")}`);
 	try {
 		await page.waitForFunction(
-			() => document.getElementById("frame")?.contentDocument?.title?.includes("Umbrella"),
+			() => {
+				const doc = document.getElementById("frame")?.contentDocument;
+				return !!doc?.getElementById("retry") && doc.title.includes("doesn't seem to exist");
+			},
 			null,
 			{ timeout: 30_000 }
 		);
 		const title = await proxyFrame(page).title();
-		pass(`unknown host shows an umbrella error page ("${title}")`);
+		pass(`unknown host shows the error page ("${title.trim()}")`);
 	} catch {
-		fail("unknown host did not show the umbrella error page");
+		fail("unknown host did not show the error page");
 	}
 	await context.close();
 }
@@ -392,14 +398,16 @@ async function runRealSites() {
 		await page.goto(`${base}/?go=${encodeURIComponent(url)}`);
 		await page.waitForTimeout(15_000);
 		let title = "";
+		let errorPage = false;
 		try {
 			title = await proxyFrame(page).title();
+			errorPage = await proxyFrame(page).evaluate(() => !!document.querySelector("main.card #retry"));
 		} catch {
 			// frame gone
 		}
 		const shot = `e2e-${new URL(url).hostname}.png`;
 		await page.screenshot({ path: shot });
-		title && !title.includes("Umbrella") ? pass(`${url} loaded ("${title}", screenshot ${shot})`) : fail(`${url} did not load (title "${title}")`);
+		title && !errorPage ? pass(`${url} loaded ("${title}", screenshot ${shot})`) : fail(`${url} did not load (title "${title}")`);
 		if (errors.length) console.log(`       shell errors: ${errors.slice(0, 3).join(" | ")}`);
 		await context.close();
 	}

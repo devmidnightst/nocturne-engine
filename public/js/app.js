@@ -1448,11 +1448,15 @@ async function boot() {
 
 	const target = go ? resolveInput(go) : null;
 	if (target) {
-		const tab = makeTab();
-		tabs.push(tab);
+		let tab = active?.type === "browser" && !active.url ? active : null;
+		if (!tab) {
+			tab = makeTab();
+			tabs.push(tab);
+		}
 		navigate(target, { tab });
 	} else if (active?.type === "browser" && active.url && !active.handle) {
 		ensureFrame(active).go(active.url);
+		showFrames();
 	} else {
 		for (const t of tabs) {
 			if (t.type === "browser" && t.url && !t.handle) {
