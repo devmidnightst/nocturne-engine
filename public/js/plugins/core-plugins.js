@@ -1,4 +1,4 @@
-import { isBlocked } from "./blocklist.js";
+import { isBlocked, surrogateFor } from "./blocklist.js";
 import {
 	_rE,
 	_rB,
@@ -47,9 +47,10 @@ const EMPTY_TYPES = {
 };
 
 export class _CB extends ManagedPlugin {
-	constructor(isEnabled) {
+	constructor(isEnabled, site) {
 		super("_cb4", []);
 		this.isEnabled = isEnabled;
+		this.site = site;
 		this.blocked = 0;
 	}
 
@@ -58,7 +59,7 @@ export class _CB extends ManagedPlugin {
 		this.tap(frame.hooks.fetch.intercept, (ctx, props) => {
 			if (props.response || !this.isEnabled()) return;
 			const { url, destination } = ctx.parsed;
-			if (!url || destination === "document" || !isBlocked(url)) return;
+			if (!url || destination === "document" || !isBlocked(url, this.site()?.hostname)) return;
 
 			this.blocked++;
 			if (isNavigation(destination)) {
@@ -66,8 +67,9 @@ export class _CB extends ManagedPlugin {
 				props.response = { ...page, headers: _SH.fromRawHeaders(page.headers) };
 				return;
 			}
+			const stub = destination === "script" ? surrogateFor(url) : null;
 			props.response = {
-				body: "",
+				body: stub ?? "",
 				status: 200,
 				statusText: "OK",
 				headers: _SH.fromRawHeaders([

@@ -368,6 +368,7 @@ function activate(tab) {
 	if (changed) {
 		hideBanner();
 		if (tab.health) showHealth(tab.health);
+		else if (tab.antiAdblock) showAntiAdblock(tab.antiAdblock);
 	}
 	syncChrome();
 	scheduleRender();
@@ -433,6 +434,7 @@ function navigate(raw, { tab, newTab = false } = {}) {
 	tab.url = url;
 	tab.title = "";
 	tab.health = null;
+	tab.antiAdblock = null;
 	ensureFrame(tab).go(url);
 	ui.address.blur();
 	activate(tab);
@@ -443,6 +445,7 @@ function showHome(tab = active) {
 	tab.url = "";
 	tab.title = "";
 	tab.health = null;
+	tab.antiAdblock = null;
 	tab.loading = false;
 	tab.handle?.blank();
 	if (tab === active) {
@@ -488,18 +491,36 @@ function tabEvents(tab) {
 			tab.health = info;
 			if (tab === active) showHealth(info);
 		},
+		onAntiAdblock(info) {
+			tab.antiAdblock = info;
+			if (tab === active && !tab.health) showAntiAdblock(info);
+		},
 	};
 }
 
 let bannerOrigin = null;
-function showBanner(title, detail, origin) {
+function showBanner(title, detail, origin, adblock = false) {
 	bannerOrigin = origin;
 	$("banner-title").textContent = title;
 	$("banner-detail").textContent = detail;
+	for (const btn of ui.banner.querySelectorAll("[data-action]")) {
+		if (btn.dataset.action !== "dismiss") btn.hidden = adblock !== (btn.dataset.action === "adblock-off");
+	}
 	const compatBtn = ui.banner.querySelector('[data-action="compat"]');
 	compatBtn.textContent = engine?.isCompat(origin) ? "turn off compat mode" : "compat mode";
-	compatBtn.hidden = !origin;
+	if (!adblock) compatBtn.hidden = !origin;
 	ui.banner.hidden = false;
+}
+
+function showAntiAdblock(info) {
+	const origin = originOf(info.url);
+	if (!origin) return;
+	showBanner(
+		"this site wants ad blocking off",
+		`${hostOf(origin)} seems to have noticed the ad blocker. turn it off for this site and reload?`,
+		origin,
+		true
+	);
 }
 
 function showHealth(info) {
@@ -527,7 +548,10 @@ ui.banner.addEventListener("click", async (e) => {
 	const action = e.target.closest("[data-action]")?.dataset.action;
 	if (!action) return;
 	if (action === "dismiss") {
-		if (active) active.health = null;
+		if (active) {
+			active.health = null;
+			active.antiAdblock = null;
+		}
 		return hideBanner();
 	}
 	hideBanner();
@@ -536,6 +560,13 @@ ui.banner.addEventListener("click", async (e) => {
 		const on = !engine.isCompat(bannerOrigin);
 		engine.setCompat(bannerOrigin, on);
 		toast(on ? `compat mode on for ${hostOf(bannerOrigin)}` : `compat mode off for ${hostOf(bannerOrigin)}`);
+		renderSettings();
+		return reloadActive();
+	}
+	if (action === "adblock-off" && bannerOrigin) {
+		engine.setAdblock(hostOf(bannerOrigin), false);
+		if (active) active.antiAdblock = null;
+		toast(`ad blocking off for ${hostOf(bannerOrigin)}`);
 		renderSettings();
 		return reloadActive();
 	}
@@ -1130,6 +1161,29 @@ function renderSettings() {
 		for (const [id, eng] of Object.entries(SEARCH_ENGINES)) search.append(new Option(eng.name, id));
 	}
 	search.value = s.searchEngine;
+	$("adblock-off-list").replaceChildren(
+		...(s.adblockOff.length
+			? s.adblockOff.map((host) =>
+					el(
+						"li",
+						{ class: "chip" },
+						host,
+						el(
+							"button",
+							{
+								class: "chip-x",
+								"aria-label": `remove ${host}`,
+								onclick: () => {
+									engine?.setAdblock(host, true);
+									renderSettings();
+								},
+							},
+							"✕"
+						)
+					)
+				)
+			: [el("li", { class: "muted" }, "none")])
+	);
 	$("compat-list").replaceChildren(
 		...(s.compatSites.length
 			? s.compatSites.map((origin) =>
