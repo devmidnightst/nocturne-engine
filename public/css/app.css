@@ -1305,6 +1305,22 @@ body.collapsed.peek .sidebar {
 	color: var(--text);
 }
 
+.game-error {
+	align-items: center;
+	justify-content: center;
+	gap: 14px;
+}
+
+.game-error .games-browser-status {
+	padding: 0;
+}
+
+.game-error .games-browser-more {
+	width: auto;
+	margin: 0;
+	padding: 10px 22px;
+}
+
 .hero-btns {
 	display: flex;
 	align-items: center;

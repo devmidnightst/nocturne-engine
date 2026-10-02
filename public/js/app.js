@@ -314,14 +314,23 @@ function ensureFrame(tab) {
 async function _startGameFrame(tab) {
 	if (tab.iframe) return;
 	tab.loading = true;
+	tab.aiDiv?.remove();
+	tab.aiDiv = null;
 	scheduleRender();
 	try {
-		const { url } = await Lumin.getGameUrl(tab.gameId);
+		if (!(await _ensureLumin())) throw new Error("lumin");
+		const res = await Promise.race([
+			Lumin.getGameUrl(tab.gameId),
+			new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20000)),
+		]);
+		const url = typeof res === "string" ? res : res?.url;
+		if (!url) throw new Error("no url");
+		if (!tabs.includes(tab) || tab.iframe) return;
 		const iframe = el("iframe", {
 			class: "tab-frame",
 			id: `frame-${tab.id}`,
 			title: tab.title,
-			allow: "autoplay; fullscreen; pointer-lock; gamepad",
+			allow: "autoplay; fullscreen; pointer-lock; gamepad; clipboard-read; clipboard-write; keyboard-map; accelerometer; gyroscope",
 			allowfullscreen: "",
 		});
 		iframe.src = url;
@@ -332,8 +341,25 @@ async function _startGameFrame(tab) {
 		scheduleRender();
 	} catch {
 		tab.loading = false;
+		if (tabs.includes(tab)) _gameError(tab);
 		scheduleRender();
 	}
+}
+
+function _gameError(tab) {
+	const retry = el("button", { class: "games-browser-more" }, "try again");
+	const div = el("div", { class: "tab-frame games-browser-frame game-error" },
+		el("p", { class: "games-browser-status" }, `couldn't load ${tab.title || "this game"}`),
+		retry,
+	);
+	retry.addEventListener("click", () => {
+		if (tab._gameStarting) return;
+		tab._gameStarting = true;
+		_startGameFrame(tab).then(() => { tab._gameStarting = false; });
+	});
+	ui.frames.append(div);
+	tab.aiDiv = div;
+	showFrames();
 }
 
 function showFrames() {
@@ -735,29 +761,72 @@ async function _ensureLumin() {
 	} catch { return false; }
 }
 
+const _G_LIMIT = 60;
+
 async function _gTabLoadPage(tab, page) {
 	const grid = tab._gGrid;
 	const more = tab._gMore;
 	const status = tab._gStatus;
 	if (!grid) return;
-	if (status) status.textContent = "loading...";
-	try {
-		let result;
-		if (tab._gQuery) {
-			result = await Lumin.search(tab._gQuery);
-		} else {
-			result = await Lumin.getGames({ page });
-		}
-		const games = result?.games ?? [];
-		tab._gPage = page;
-		if (page === 0) grid.replaceChildren();
-		for (const g of games) grid.append(_gCard(g));
-		const hasMore = !tab._gQuery && games.length >= 24;
-		if (more) more.hidden = !hasMore;
-		if (status) status.textContent = games.length ? "" : "no games found";
-	} catch (err) {
-		if (status) status.textContent = "couldn't load games";
+	if (page === 1) {
+		tab._gGen = (tab._gGen || 0) + 1;
+		tab._gSeen = new Set();
+		tab._gDone = false;
+		tab._gBusy = false;
 	}
+	if (tab._gBusy || tab._gDone) return;
+	const gen = tab._gGen;
+	const query = tab._gQuery;
+	tab._gBusy = true;
+	if (more) more.hidden = true;
+	if (status && page === 1) status.textContent = "loading...";
+	try {
+		const opts = { page, limit: _G_LIMIT };
+		if (query) opts.q = query;
+		const result = await Lumin.getGames(opts);
+		if (gen !== tab._gGen) return;
+		const games = Array.isArray(result?.games) ? result.games : [];
+		if (page === 1) grid.replaceChildren();
+		let added = 0;
+		for (const g of games) {
+			if (!g || g.id == null || tab._gSeen.has(g.id)) continue;
+			tab._gSeen.add(g.id);
+			grid.append(_gCard(g, tab));
+			added++;
+		}
+		tab._gPage = page;
+		const pages = Number(result?.pages);
+		const total = Number(result?.total);
+		if (Number.isFinite(pages) && pages > 0) tab._gDone = page >= pages;
+		else if (Number.isFinite(total) && total > 0) tab._gDone = tab._gSeen.size >= total;
+		else tab._gDone = games.length === 0;
+		if (!added) tab._gDone = true;
+		if (!query && Number.isFinite(total) && total > 0 && tab._gSearch) tab._gSearch.placeholder = `search ${total.toLocaleString()} games...`;
+		if (status) status.textContent = tab._gSeen.size ? "" : "no games found";
+		tab._gBusy = false;
+		if (more) more.hidden = tab._gDone;
+		_gFill(tab);
+	} catch {
+		if (gen !== tab._gGen) return;
+		tab._gBusy = false;
+		if (page === 1) {
+			if (status) status.textContent = "couldn't load games";
+			if (more) { more.textContent = "try again"; more.hidden = false; }
+		} else if (more) {
+			more.textContent = "couldn't load more, try again";
+			more.hidden = false;
+		}
+		tab._gRetry = page;
+		return;
+	}
+	if (more) more.textContent = "load more";
+	tab._gRetry = 0;
+}
+
+function _gFill(tab) {
+	const grid = tab._gGrid;
+	if (!grid || tab._gDone || tab._gBusy || !tab.aiDiv?.classList.contains("active")) return;
+	if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 800) _gTabLoadPage(tab, tab._gPage + 1);
 }
 
 function _createGamesDiv(tab) {
@@ -784,33 +853,68 @@ function _createGamesDiv(tab) {
 	tab._gGrid = grid;
 	tab._gMore = more;
 	tab._gStatus = status;
+	tab._gSearch = search;
 	tab._gPage = 0;
 	tab._gQuery = "";
+	tab._gImgs = typeof IntersectionObserver === "function"
+		? new IntersectionObserver((entries) => {
+			for (const e of entries) {
+				if (!e.isIntersecting) continue;
+				tab._gImgs.unobserve(e.target);
+				e.target._gLoadImg?.();
+			}
+		}, { root: grid, rootMargin: "400px 0px" })
+		: null;
 
 	let searchTimer;
 	search.addEventListener("input", () => {
 		clearTimeout(searchTimer);
-		searchTimer = setTimeout(async () => {
-			tab._gQuery = search.value.trim();
-			if (_luminReady) await _gTabLoadPage(tab, 0);
+		searchTimer = setTimeout(() => {
+			const q = search.value.trim();
+			if (q === tab._gQuery) return;
+			tab._gQuery = q;
+			grid.scrollTop = 0;
+			if (_luminReady) _gTabLoadPage(tab, 1);
 		}, 300);
 	});
-	more.addEventListener("click", () => _gTabLoadPage(tab, tab._gPage + 1));
+	grid.addEventListener("scroll", () => _gFill(tab), { passive: true });
+	more.addEventListener("click", () => {
+		if (!_luminReady) return _gStart(tab);
+		if (tab._gRetry) return _gTabLoadPage(tab, tab._gRetry);
+		_gTabLoadPage(tab, tab._gPage + 1);
+	});
+	new ResizeObserver(() => _gFill(tab)).observe(grid);
 
 	ui.frames.append(div);
 
-	_ensureLumin().then((ok) => { if (ok) _gTabLoadPage(tab, 0); else if (status) status.textContent = "games unavailable"; });
+	_gStart(tab);
 
 	return div;
 }
 
-function _gCard(game) {
+function _gStart(tab) {
+	const status = tab._gStatus;
+	const more = tab._gMore;
+	if (status) status.textContent = "loading...";
+	if (more) more.hidden = true;
+	_ensureLumin().then((ok) => {
+		if (ok) return _gTabLoadPage(tab, 1);
+		if (status) status.textContent = "games unavailable";
+		if (more) { more.textContent = "try again"; more.hidden = false; }
+	});
+}
+
+function _gCard(game, tab) {
 	const card = el("button", { class: "gcard", title: game.name, "data-gid": game.id });
 	const img = el("img", { class: "gcard-img", alt: game.name, loading: "lazy" });
 	img.src = "/img/logo.svg";
 	img.style.opacity = "0.25";
 	if (game.image_token && typeof Lumin !== "undefined") {
-		Lumin.getImageUrl(game.image_token).then((url) => { img.src = url; img.style.opacity = ""; }).catch(() => {});
+		card._gLoadImg = () => {
+			Lumin.getImageUrl(game.image_token).then((url) => { img.src = url; img.style.opacity = ""; }).catch(() => {});
+		};
+		if (tab?._gImgs) tab._gImgs.observe(card);
+		else card._gLoadImg();
 	}
 	const label = el("span", { class: "gcard-label" }, game.name);
 	card.append(img, label);
