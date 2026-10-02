@@ -766,25 +766,89 @@
 	display: flex;
 	flex-wrap: wrap;
 	gap: 6px;
-	margin-top: 10px;
+	margin-top: 12px;
 }
 
 .aic-sources a {
-	max-width: 240px;
-	padding: 3px 9px;
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+	max-width: 260px;
+	padding: 4px 10px 4px 4px;
 	border: 1px solid var(--a-line);
 	border-radius: 999px;
 	font-size: 0.75rem;
-	color: var(--a-muted);
+	color: var(--a-text);
 	text-decoration: none;
-	overflow: hidden;
 	white-space: nowrap;
-	text-overflow: ellipsis;
 }
 
 .aic-sources a:hover {
-	color: var(--a-text);
 	background: var(--a-hover);
+	border-color: color-mix(in srgb, var(--a-accent) 40%, var(--a-line));
+}
+
+.aic-sources a > span:nth-child(2) {
+	min-width: 0;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.aic-sources small {
+	flex: none;
+	font-size: 0.7rem;
+	color: var(--a-muted);
+}
+
+.aic-source-n,
+.aic-cite {
+	display: inline-grid;
+	place-items: center;
+	min-width: 18px;
+	height: 18px;
+	padding: 0 4px;
+	border-radius: 999px;
+	background: var(--a-accent-soft);
+	color: var(--a-accent);
+	font-size: 0.68rem;
+	font-weight: 600;
+	line-height: 1;
+}
+
+.aic-md a.aic-cite {
+	margin: 0 1px;
+	vertical-align: 2px;
+	text-decoration: none;
+}
+
+.aic-md a.aic-cite:hover {
+	background: var(--a-accent);
+	color: var(--a-on-accent);
+}
+
+.aic-note {
+	display: flex;
+	align-items: flex-start;
+	gap: 7px;
+	margin: 0 0 10px;
+	padding: 7px 10px;
+	border: 1px solid var(--a-line);
+	border-radius: 9px;
+	background: var(--a-raise);
+	font-size: 0.8rem;
+	line-height: 1.45;
+	color: var(--a-muted);
+}
+
+.aic-md + .aic-note,
+.aic-sources + .aic-note {
+	margin: 10px 0 0;
+}
+
+.aic-note .aic-ico {
+	width: 14px;
+	height: 14px;
+	margin-top: 2px;
 }
 
 .aic-status {
