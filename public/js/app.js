@@ -165,7 +165,7 @@ function writeSession() {
 	clearTimeout(saveTimer);
 	saveTimer = null;
 	session.save({
-		tabs: tabs.map(({ id, url, title, type, gameId }) => ({ id, url, title, type, gameId })),
+		tabs: tabs.filter((t) => !t.closing).map(({ id, url, title, type, gameId }) => ({ id, url, title, type, gameId })),
 		active: active?.id ?? null,
 	});
 }
@@ -251,11 +251,14 @@ function tabRow(tab) {
 	if (!row) {
 		row = el(
 			"li",
-			{ class: "tab-row", role: "tab", draggable: "true", "data-id": tab.id },
+			{ class: "tab-row entering", role: "tab", draggable: "true", "data-id": tab.id },
 			el("span", { class: "fav" }),
 			el("span", { class: "tab-title" }),
 			el("button", { class: "tab-close", "data-close": tab.id }, icon("M6 6l12 12M18 6L6 18"))
 		);
+		row.addEventListener("animationend", (e) => {
+			if (e.target === row && e.animationName === "tab-slide-in") row.classList.remove("entering");
+		});
 		tabRows.set(tab.id, row);
 	}
 	const isActive = tab === active;
@@ -332,7 +335,7 @@ function renderEssentials() {
 }
 
 function openBookmark(url) {
-	const existing = tabs.find((t) => t.url === url);
+	const existing = tabs.find((t) => t.url === url && !t.closing);
 	if (existing) return activate(existing);
 	if (active && !active.url) return navigate(url);
 	navigate(url, { newTab: true });
@@ -455,7 +458,7 @@ function showFrames() {
 }
 
 function activate(tab) {
-	if (!tab) return;
+	if (!tab || tab.closing) return;
 	const changed = active !== tab;
 	active = tab;
 	if (tab.type === "game") {
@@ -503,6 +506,13 @@ function closeTab(tab) {
 	const i = tabs.indexOf(tab);
 	if (i === -1 || tab.closing) return;
 	tab.closing = true;
+	clearTimeout(tab.loadingTimer);
+	if (tab === active) {
+		const open = tabs.filter((t) => !t.closing);
+		const next = open.find((t) => t.id === tab.openerId) ?? open[Math.min(tabs.slice(0, i).filter((t) => !t.closing).length, open.length - 1)];
+		if (next) activate(next);
+		else openTab();
+	}
 	const row = tabRows.get(tab.id);
 	let done = false;
 	const finish = () => {
@@ -513,18 +523,12 @@ function closeTab(tab) {
 		tab.iframe?.remove();
 		const at = tabs.indexOf(tab);
 		if (at !== -1) tabs.splice(at, 1);
-		if (!tabs.length) tabs.push(makeTab());
-		if (tab === active) {
-			active = null;
-			activate(tabs.find((t) => t.id === tab.openerId) ?? tabs[Math.min(i, tabs.length - 1)]);
-		} else {
-			scheduleRender();
-			saveSession();
-		}
+		scheduleRender();
+		saveSession();
 	};
 	if (row?.isConnected) {
 		row.classList.add("closing");
-		row.addEventListener("animationend", (e) => e.target === row && finish());
+		row.addEventListener("animationend", (e) => e.target === row && e.animationName === "tab-slide-out" && finish());
 		setTimeout(finish, 300);
 	} else {
 		finish();
@@ -566,13 +570,16 @@ function showHome(tab = active) {
 
 function tabEvents(tab) {
 	const setTabLoading = (on) => {
+		clearTimeout(tab.loadingTimer);
+		if (on) tab.loadingTimer = setTimeout(() => setTabLoading(false), 30_000);
+		if (tab.loading === on) return;
 		tab.loading = on;
 		scheduleRender();
 		if (tab === active) setLoading(on);
 	};
 	return {
 		onUrl(url) {
-			if (!url || url === "about:blank") return;
+			if (!url || url === "about:blank" || !tabs.includes(tab)) return;
 			tab.url = url;
 			history.add(url, tab.title);
 			if (tab === active) syncChrome();
@@ -580,6 +587,7 @@ function tabEvents(tab) {
 			saveSession();
 		},
 		onTitle(title) {
+			if ((title || "") === tab.title) return;
 			tab.title = title || "";
 			if (tab.url) history.setTitle(tab.url, tab.title);
 			scheduleRender();
@@ -590,7 +598,7 @@ function tabEvents(tab) {
 			if (tab.url) loadIcon(tab.url, src);
 		},
 		onOpen(url, { background = false } = {}) {
-			if (tabs.includes(tab)) openTab(url, { opener: tab, background });
+			if (tabs.includes(tab) && !tab.closing) openTab(url, { opener: tab, background });
 		},
 		onError(info) {
 			if (info.destination === "document" || info.destination === "iframe") setTabLoading(false);
@@ -1043,7 +1051,7 @@ function _gCard(game, tab) {
 }
 
 function _gOpen(game) {
-	const existing = tabs.find((t) => t.type === "game" && t.gameId === game.id);
+	const existing = tabs.find((t) => t.type === "game" && t.gameId === game.id && !t.closing);
 	if (existing) return activate(existing);
 	const tab = makeGameTab(game);
 	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
@@ -1328,7 +1336,7 @@ $("clear-data").addEventListener("click", async () => {
 $("about-link").addEventListener("click", () => openPanel("about"));
 
 function openAiTab() {
-	const existing = tabs.find((t) => t.type === "ai");
+	const existing = tabs.find((t) => t.type === "ai" && !t.closing);
 	if (existing) return activate(existing);
 	const tab = makeAiTab();
 	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
@@ -1337,7 +1345,7 @@ function openAiTab() {
 $("ai-btn").addEventListener("click", openAiTab);
 
 function openGamesTab() {
-	const existing = tabs.find((t) => t.type === "games");
+	const existing = tabs.find((t) => t.type === "games" && !t.closing);
 	if (existing) return activate(existing);
 	const tab = makeGamesTab();
 	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
@@ -1401,7 +1409,7 @@ window.addEventListener("pagehide", () => {
 });
 
 Object.defineProperty(window, "__nc_a3c8", { value: (frameEl, go) => {
-	const tab = tabs.find((t) => t.iframe && t.iframe === frameEl);
+	const tab = tabs.find((t) => t.iframe && t.iframe === frameEl && !t.closing);
 	if (!tab || !engine) return false;
 	const target = go ? resolveInput(go) : null;
 	setTimeout(() => (target ? navigate(target, { tab }) : showHome(tab)));
@@ -1457,14 +1465,6 @@ async function boot() {
 	} else if (active?.type === "browser" && active.url && !active.handle) {
 		ensureFrame(active).go(active.url);
 		showFrames();
-	} else {
-		for (const t of tabs) {
-			if (t.type === "browser" && t.url && !t.handle) {
-				ensureFrame(t).go(t.url);
-				if (t !== active) activate(t);
-				break;
-			}
-		}
 	}
 }
 

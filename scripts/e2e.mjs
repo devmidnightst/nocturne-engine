@@ -366,9 +366,39 @@ async function runTabs() {
 			? pass("a reload brings back every tab and the active one")
 			: fail(`reload restored ${JSON.stringify(restored)}`);
 
+		// busy sites keep changing <head>, which used to rebuild every tab row
+		await page.evaluate(() => {
+			window.__rowsAdded = 0;
+			new MutationObserver((ms) => {
+				for (const m of ms) window.__rowsAdded += [...m.addedNodes].filter((n) => n.classList?.contains("tab-row")).length;
+			}).observe(document.getElementById("tab-list"), { childList: true });
+		});
+		await tabFrame().evaluate(
+			() =>
+				new Promise((r) => {
+					let n = 0;
+					const t = setInterval(() => {
+						document.head.append(document.createElement("style"));
+						if (++n >= 100) clearInterval(t), r();
+					}, 5);
+				})
+		);
+		await page.waitForTimeout(300);
+		const rowsAdded = await page.evaluate(() => window.__rowsAdded);
+		rowsAdded === 0 ? pass("head changes on a busy page leave the tab list alone") : fail(`head changes rebuilt ${rowsAdded} tab rows`);
+
 		await page.keyboard.press("Alt+w");
 		await waitRows(2);
 		pass("alt+w closes the current tab");
+
+		// open tabs only live for the browser session
+		const fresh = await context.newPage();
+		await fresh.goto(base);
+		await fresh.waitForSelector(".tab-row", { timeout: 30_000 });
+		await fresh.waitForTimeout(500);
+		const freshRows = (await fresh.$$(".tab-row")).length;
+		freshRows === 1 ? pass("a fresh visit starts with one tab") : fail(`a fresh visit opened ${freshRows} tabs`);
+		await fresh.close();
 	} catch (err) {
 		fail(`tab checks: ${err.message}`);
 	}
