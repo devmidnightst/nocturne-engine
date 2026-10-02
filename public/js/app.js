@@ -1,6 +1,9 @@
 import { createEngine, versionInfo } from "./engine.js";
 import { resolveInput } from "./omnibox.js";
-import { settings, bookmarks, history, session, icons, SEARCH_ENGINES, defaultServerUrl } from "./store.js";
+import { settings, bookmarks, history, session, icons, SEARCH_ENGINES } from "./store.js";
+import { _nrc, _nrp } from "./net-resolver.js";
+
+_nrp().catch(() => {});
 
 const nestedInShell = (() => {
 	if (window.self === window.top) return false;
@@ -26,7 +29,7 @@ const ui = {
 	homeView: $("home-view"),
 	frames: $("frames"),
 	boot: $("boot"),
-	bootStatus: $("boot-status"),
+	bootStatus: $("bs-0"),
 	panel: $("panel"),
 	banner: $("banner"),
 	toast: $("toast"),
@@ -130,8 +133,28 @@ function prefetchIcons() {
 let idSeq = 0;
 const newId = () => `${Date.now().toString(36)}${(idSeq++).toString(36)}`;
 
-function makeTab({ id, url = "", title = "" } = {}) {
-	return { id: id || newId(), url, title, iframe: null, handle: null, loading: false, health: null, openerId: null };
+function makeTab({ id, url = "", title = "", type = "browser" } = {}) {
+	return { id: id || newId(), url, title, iframe: null, handle: null, loading: false, health: null, openerId: null, type, gameId: null, gameImg: null, aiDiv: null, messages: null };
+}
+
+function makeGameTab(game) {
+	const tab = makeTab({ title: game.name, type: "game" });
+	tab.gameId = game.id;
+	tab.loading = true;
+	if (game.image_token && typeof Lumin !== "undefined") {
+		Lumin.getImageUrl(game.image_token).then((url) => { tab.gameImg = url; scheduleRender(); }).catch(() => {});
+	}
+	return tab;
+}
+
+function makeAiTab() {
+	const tab = makeTab({ title: "AI", type: "ai" });
+	tab.messages = [];
+	return tab;
+}
+
+function makeGamesTab() {
+	return makeTab({ title: "games", type: "games" });
 }
 
 const tabLabel = (tab) => tab.title || (tab.url ? hostOf(tab.url) : "new tab");
@@ -193,7 +216,11 @@ function renderTabs() {
 					title: tab.url || "new tab",
 					"data-id": tab.id,
 				},
-				tab.loading ? el("span", { class: "fav spinner" }) : tab.url ? favicon(tab.url) : el("span", { class: "fav img blank" }, el("img", { src: "/img/logo.svg", alt: "" })),
+				tab.loading ? el("span", { class: "fav spinner" })
+					: tab.type === "ai" ? el("span", { class: "fav ai-fav" }, "✦")
+					: tab.type === "games" ? el("span", { class: "fav games-fav" }, "▦")
+					: tab.type === "game" ? (tab.gameImg ? el("span", { class: "fav img" }, el("img", { src: tab.gameImg, alt: "" })) : el("span", { class: "fav" }, "▶"))
+					: tab.url ? favicon(tab.url) : el("span", { class: "fav img blank" }, el("img", { src: "/img/logo.svg", alt: "" })),
 				el("span", { class: "tab-title" }, tabLabel(tab)),
 				el("button", { class: "tab-close", "aria-label": `close ${tabLabel(tab)}`, "data-close": tab.id }, icon("M6 6l12 12M18 6L6 18"))
 			)
@@ -243,26 +270,38 @@ function setLoading(on) {
 
 function updateBookmarkButton() {
 	const url = active?.url;
-	ui.bookmark.classList.toggle("on", !!url && bookmarks.has(url));
-	ui.bookmark.disabled = !url;
+	const isBrowser = !active?.type || active?.type === "browser";
+	ui.bookmark.classList.toggle("on", isBrowser && !!url && bookmarks.has(url));
+	ui.bookmark.disabled = !isBrowser || !url;
 }
 
 function syncChrome() {
 	const url = active?.url ?? "";
-	if (document.activeElement !== ui.address) ui.address.value = url;
-	ui.mobileUrl.textContent = url ? hostOf(url) : "search or type a url";
-	document.title = "Umbrella";
+	const isSpecial = active?.type === "game" || active?.type === "ai" || active?.type === "games";
+	if (document.activeElement !== ui.address) {
+		if (active?.type === "ai") ui.address.value = "AI";
+		else if (active?.type === "games") ui.address.value = "games";
+		else if (active?.type === "game") ui.address.value = active.title;
+		else ui.address.value = url;
+	}
+	ui.mobileUrl.textContent = active?.type === "ai" ? "AI"
+		: active?.type === "games" ? "games"
+		: active?.type === "game" ? active.title
+		: (url ? hostOf(url) : "search or type a url");
+	document.title = "Browse";
 	setLoading(!!active?.loading);
 	updateBookmarkButton();
-	for (const id of ["back", "forward", "reload"]) $(id).disabled = !active?.handle || !url;
+	for (const id of ["back", "forward", "reload"]) $(id).disabled = isSpecial || !active?.handle || !url;
 }
 
 function ensureFrame(tab) {
+	if (tab.type === "game") { _startGameFrame(tab); return null; }
+	if (tab.type === "ai") { if (!tab.aiDiv) _createAiDiv(tab); return null; }
 	if (tab.handle) return tab.handle;
 	const iframe = el("iframe", {
 		class: "tab-frame",
 		id: `frame-${tab.id}`,
-		title: "Umbrella viewport",
+		title: "viewport",
 		allow: FRAME_ALLOW,
 		allowfullscreen: "",
 	});
@@ -272,21 +311,57 @@ function ensureFrame(tab) {
 	return tab.handle;
 }
 
+async function _startGameFrame(tab) {
+	if (tab.iframe) return;
+	tab.loading = true;
+	scheduleRender();
+	try {
+		const { url } = await Lumin.getGameUrl(tab.gameId);
+		const iframe = el("iframe", {
+			class: "tab-frame",
+			id: `frame-${tab.id}`,
+			title: tab.title,
+			allow: "autoplay; fullscreen; pointer-lock; gamepad",
+			allowfullscreen: "",
+		});
+		iframe.src = url;
+		ui.frames.append(iframe);
+		tab.iframe = iframe;
+		tab.loading = false;
+		showFrames();
+		scheduleRender();
+	} catch {
+		tab.loading = false;
+		scheduleRender();
+	}
+}
+
 function showFrames() {
 	for (const t of tabs) {
-		if (!t.iframe) continue;
-		const shown = t === active && !!t.url;
-		t.iframe.classList.toggle("active", shown);
-		t.iframe.id = t === active ? "frame" : `frame-${t.id}`;
+		if (t.iframe) {
+			const shown = t === active && (!!t.url || t.type === "game");
+			t.iframe.classList.toggle("active", shown);
+			t.iframe.id = t === active ? "frame" : `frame-${t.id}`;
+		}
+		if (t.aiDiv) {
+			t.aiDiv.classList.toggle("active", t === active);
+		}
 	}
-	ui.homeView.hidden = !!active?.url;
+	const isSpecial = active?.type === "game" || active?.type === "ai" || active?.type === "games";
+	ui.homeView.hidden = (!!active?.url && !!engine) || isSpecial;
 }
 
 function activate(tab) {
 	if (!tab) return;
 	const changed = active !== tab;
 	active = tab;
-	if (tab.url && !tab.handle && engine) {
+	if (tab.type === "game") {
+		if (!tab.iframe && !tab._gameStarting) { tab._gameStarting = true; _startGameFrame(tab).then(() => { tab._gameStarting = false; }); }
+	} else if (tab.type === "ai") {
+		if (!tab.aiDiv) _createAiDiv(tab);
+	} else if (tab.type === "games") {
+		if (!tab.aiDiv) _createGamesDiv(tab);
+	} else if (tab.url && !tab.handle && engine) {
 		ensureFrame(tab).go(tab.url);
 	}
 	showFrames();
@@ -298,7 +373,7 @@ function activate(tab) {
 	scheduleRender();
 	saveSession();
 	closeDrawer();
-	if (!tab.url) $("hero-input").focus({ preventScroll: true });
+	if (!tab.url && tab.type === "browser") $("hero-input").focus({ preventScroll: true });
 }
 
 function openTab(url, { opener = null, background = false } = {}) {
@@ -325,6 +400,7 @@ function closeTab(tab) {
 	if (i === -1) return;
 	const row = ui.tabList.querySelector(`[data-id="${tab.id}"]`);
 	const finish = () => {
+		tab.aiDiv?.remove();
 		tab.handle?.destroy();
 		tab.iframe?.remove();
 		tabs.splice(tabs.indexOf(tab), 1);
@@ -347,7 +423,8 @@ function closeTab(tab) {
 
 function navigate(raw, { tab, newTab = false } = {}) {
 	const url = resolveInput(raw);
-	if (!url || !engine) return;
+	if (!url) return;
+	if (!engine) { toast("engine is still starting up — try again in a moment"); return; }
 	if (newTab) {
 		tab = makeTab();
 		tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
@@ -462,18 +539,18 @@ ui.banner.addEventListener("click", async (e) => {
 		renderSettings();
 		return reloadActive();
 	}
-	if (action === "transport") {
-		await switchTransport();
+	if (action === "mode") {
+		await _sT();
 		reloadActive();
 	}
 });
 
-async function switchTransport() {
-	const next = engine.transportKind === "epoxy" ? "libcurl" : "epoxy";
+async function _sT() {
+	const next = engine._tK === "ep" ? "lc" : "ep";
 	toast(`switching to ${next}`);
 	try {
-		await engine.setTransport(next);
-		$("set-transport").value = next;
+		await engine._sT(next);
+		$("cfg-e1").value = next;
 		toast(`now using ${next}`);
 	} catch (err) {
 		console.error(err);
@@ -482,11 +559,11 @@ async function switchTransport() {
 }
 
 window.addEventListener("message", async (e) => {
-	if (e.origin !== location.origin || !e.data || typeof e.data.__nc_m9d1 !== "string") return;
+	if (e.origin !== location.origin || !e.data || typeof e.data._m9k !== "string") return;
 	const tab = tabs.find((t) => t.iframe && t.iframe.contentWindow === e.source) ?? active;
-	if (e.data.__nc_m9d1 === "home") showHome(tab);
-	if (e.data.__nc_m9d1 === "switch-transport") {
-		await switchTransport();
+	if (e.data._m9k === "home") showHome(tab);
+	if (e.data._m9k === "_m9-st") {
+		await _sT();
 		tab?.handle?.reload();
 	}
 });
@@ -610,7 +687,7 @@ function closePanel() {
 	setTimeout(() => (ui.panel.hidden = true), 200);
 }
 
-const tabOrder = ["settings", "history", "bookmarks", "games", "account", "about"];
+const tabOrder = ["settings", "history", "bookmarks", "account", "about"];
 const tabIndicator = $("tab-indicator");
 
 function moveIndicator(btn) {
@@ -644,37 +721,351 @@ function selectTab(tab) {
 	if (tab === "settings") renderSettings();
 	if (tab === "about") renderAbout();
 	if (tab === "account") renderAccount();
-	if (tab === "games") initGames();
 }
 
-let gamesReady = false;
-function initGames() {
-	if (gamesReady) return;
-	if (typeof Lumin === "undefined") return;
-	Lumin.init({ container: "#games", theme: "dark" });
-	gamesReady = true;
-	observeGameIframes();
+let _luminReady = false;
+
+async function _ensureLumin() {
+	if (_luminReady) return true;
+	if (typeof Lumin === "undefined") return false;
+	try {
+		await Lumin.init({ headless: true });
+		_luminReady = true;
+		return true;
+	} catch { return false; }
 }
 
-function observeGameIframes() {
-	const container = $("games");
-	if (!container) return;
-	const observer = new MutationObserver(() => {
-		for (const iframe of container.querySelectorAll("iframe:not([data-fs-ready])")) {
-			iframe.dataset.fsReady = "1";
-			iframe.setAttribute("allowfullscreen", "");
-			iframe.allow = "fullscreen; autoplay";
-			const wrap = iframe.parentElement;
-			if (!wrap) continue;
-			const btn = el("button", {
-				class: "game-fullscreen-bar",
-				style: "justify-content:flex-end;padding:4px 8px;border-bottom:none",
-				onclick: () => openGameFullscreen(iframe.src, iframe.title || "game"),
-			}, el("span", { style: "font-size:11px" }, "fullscreen"));
-			wrap.insertBefore(btn, iframe);
+async function _gTabLoadPage(tab, page) {
+	const grid = tab._gGrid;
+	const more = tab._gMore;
+	const status = tab._gStatus;
+	if (!grid) return;
+	if (status) status.textContent = "loading...";
+	try {
+		let result;
+		if (tab._gQuery) {
+			result = await Lumin.search(tab._gQuery);
+		} else {
+			result = await Lumin.getGames({ page });
+		}
+		const games = result?.games ?? [];
+		tab._gPage = page;
+		if (page === 0) grid.replaceChildren();
+		for (const g of games) grid.append(_gCard(g));
+		const hasMore = !tab._gQuery && games.length >= 24;
+		if (more) more.hidden = !hasMore;
+		if (status) status.textContent = games.length ? "" : "no games found";
+	} catch (err) {
+		if (status) status.textContent = "couldn't load games";
+	}
+}
+
+function _createGamesDiv(tab) {
+	const div = el("div", { class: "tab-frame games-browser-frame" });
+
+	const header = el("div", { class: "games-browser-header" });
+	const search = el("input", {
+		class: "games-browser-search",
+		type: "search",
+		placeholder: "search games...",
+		autocomplete: "off",
+		spellcheck: "false",
+	});
+	header.append(search);
+
+	const status = el("p", { class: "games-browser-status" }, "loading...");
+	const grid = el("div", { class: "games-browser-grid" });
+	const more = el("button", { class: "games-browser-more" }, "load more");
+	more.hidden = true;
+
+	div.append(header, status, grid, more);
+
+	tab.aiDiv = div;
+	tab._gGrid = grid;
+	tab._gMore = more;
+	tab._gStatus = status;
+	tab._gPage = 0;
+	tab._gQuery = "";
+
+	let searchTimer;
+	search.addEventListener("input", () => {
+		clearTimeout(searchTimer);
+		searchTimer = setTimeout(async () => {
+			tab._gQuery = search.value.trim();
+			if (_luminReady) await _gTabLoadPage(tab, 0);
+		}, 300);
+	});
+	more.addEventListener("click", () => _gTabLoadPage(tab, tab._gPage + 1));
+
+	ui.frames.append(div);
+
+	_ensureLumin().then((ok) => { if (ok) _gTabLoadPage(tab, 0); else if (status) status.textContent = "games unavailable"; });
+
+	return div;
+}
+
+function _gCard(game) {
+	const card = el("button", { class: "gcard", title: game.name, "data-gid": game.id });
+	const img = el("img", { class: "gcard-img", alt: game.name, loading: "lazy" });
+	img.src = "/img/logo.svg";
+	img.style.opacity = "0.25";
+	if (game.image_token && typeof Lumin !== "undefined") {
+		Lumin.getImageUrl(game.image_token).then((url) => { img.src = url; img.style.opacity = ""; }).catch(() => {});
+	}
+	const label = el("span", { class: "gcard-label" }, game.name);
+	card.append(img, label);
+	card.addEventListener("click", () => _gOpen(game));
+	return card;
+}
+
+function _gOpen(game) {
+	const existing = tabs.find((t) => t.type === "game" && t.gameId === game.id);
+	if (existing) return activate(existing);
+	const tab = makeGameTab(game);
+	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
+	activate(tab);
+}
+
+const _aiModels = [
+	{ id: "claude-sonnet-5",                     label: "claude sonnet 5",           p: "anthropic" },
+	{ id: "claude-opus-5",                        label: "claude opus 5",             p: "anthropic" },
+	{ id: "claude-opus-4-8",                      label: "claude opus 4.8",           p: "anthropic" },
+	{ id: "claude-fable-5-1",                     label: "claude fable 5.1",          p: "anthropic" },
+	{ id: "gpt-5.6-luna",                         label: "gpt 5.6 luna",              p: "openai" },
+	{ id: "gpt-6-astra",                          label: "gpt 6 astra",               p: "openai" },
+	{ id: "gpt-5.6-sol",                          label: "gpt 5.6 sol",               p: "openai" },
+	{ id: "gpt-5.6-terra",                        label: "gpt 5.6 terra",             p: "openai" },
+	{ id: "gpt-5.5",                              label: "gpt 5.5",                   p: "openai" },
+	{ id: "gpt-5.4-mini",                         label: "gpt 5.4 mini",              p: "openai" },
+	{ id: "gpt-4.1",                              label: "gpt 4.1",                   p: "openai" },
+	{ id: "gpt-4o",                               label: "gpt 4o",                    p: "openai" },
+	{ id: "kimi-k3",                              label: "kimi k3",                   p: "moonshot" },
+	{ id: "kimi-k2.7-code",                       label: "kimi k2.7 code",            p: "moonshot" },
+	{ id: "grok-4.6",                             label: "grok 4.6",                  p: "xai" },
+	{ id: "deepseek-v4-pro",                      label: "deepseek v4 pro",           p: "deepseek" },
+	{ id: "deepseek-v4-flash",                    label: "deepseek v4 flash",         p: "deepseek" },
+	{ id: "deepseek-v3.2",                        label: "deepseek v3.2",             p: "deepseek" },
+	{ id: "glm-5.3",                              label: "glm 5.3",                   p: "zai" },
+	{ id: "gemini-2.5-flash-lite",                label: "gemini 2.5 flash",          p: "google" },
+	{ id: "gemma-4-26b",                          label: "gemma 4 26b",               p: "google" },
+	{ id: "qwen-3.8-max",                         label: "qwen 3.8 max",              p: "qwen" },
+	{ id: "qwen-3.7-plus",                        label: "qwen 3.7 plus",             p: "qwen" },
+	{ id: "command-a-plus",                       label: "command a+",                p: "cohere" },
+	{ id: "llama-3.3-70b-instruct",               label: "llama 3.3 70b",             p: "meta" },
+	{ id: "mistral-small-3.2-24b-instruct-2506",  label: "mistral small 3.2",         p: "mistral" },
+];
+
+function _mkAiDropdown(models, defaultId) {
+	const wrap = el("div", { class: "ai-dd" });
+	let current = models.find(m => m.id === defaultId) ?? models[0];
+
+	const trigger = el("button", { class: "ai-dd-trigger", type: "button" });
+	const dot = el("span", { class: "ai-dd-dot" });
+	const label = el("span", { class: "ai-dd-label" });
+	const chev = el("span", { class: "ai-dd-chev" });
+	chev.innerHTML = `<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>`;
+	trigger.append(dot, label, chev);
+
+	const panel = el("div", { class: "ai-dd-panel" });
+
+	function pick(m) {
+		current = m;
+		label.textContent = m.label;
+		dot.dataset.p = m.p;
+		panel.querySelectorAll(".ai-dd-opt").forEach(o =>
+			o.classList.toggle("sel", o.dataset.id === m.id));
+	}
+
+	for (const m of models) {
+		const opt = el("button", { class: "ai-dd-opt", type: "button", "data-id": m.id });
+		const odot = el("span", { class: "ai-dd-dot", "data-p": m.p });
+		opt.append(odot, document.createTextNode(m.label));
+		opt.addEventListener("click", () => { pick(m); panel.classList.remove("open"); wrap.classList.remove("open"); });
+		panel.append(opt);
+	}
+
+	trigger.addEventListener("click", (e) => {
+		e.stopPropagation();
+		const open = panel.classList.toggle("open");
+		wrap.classList.toggle("open", open);
+	});
+	document.addEventListener("click", () => {
+		panel.classList.remove("open");
+		wrap.classList.remove("open");
+	}, { capture: true, passive: true });
+
+	pick(current);
+	wrap.append(trigger, panel);
+	Object.defineProperty(wrap, "value", { get: () => current.id });
+	return wrap;
+}
+
+function _aiMd(text) {
+	let h = text
+		.replace(/&/g, "&amp;")
+		.replace(/</g, "&lt;")
+		.replace(/>/g, "&gt;");
+	h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
+		const langTag = lang ? `<span class="ai-code-lang">${lang}</span>` : "";
+		return `<div class="ai-code-wrap">${langTag}<button class="ai-copy-btn" type="button">copy</button><pre><code>${code.trim()}</code></pre></div>`;
+	});
+	h = h.replace(/`([^`\n]+)`/g, (_, c) => `<code>${c}</code>`);
+	h = h.replace(/\*\*(.+?)\*\*/g, (_, t) => `<strong>${t}</strong>`);
+	h = h.replace(/\*(.+?)\*/g, (_, t) => `<em>${t}</em>`);
+	h = h.replace(/^### (.+)$/gm, (_, t) => `<h4>${t}</h4>`);
+	h = h.replace(/^## (.+)$/gm, (_, t) => `<h3>${t}</h3>`);
+	h = h.replace(/^# (.+)$/gm, (_, t) => `<h3>${t}</h3>`);
+	h = h.replace(/^> (.+)$/gm, (_, t) => `<blockquote>${t}</blockquote>`);
+	h = h.replace(/^---$/gm, () => `<hr>`);
+	h = h.replace(/((?:^- .+\n?)+)/gm, (block) => {
+		const items = block.trim().replace(/^- (.+)$/gm, (_, t) => `<li>${t}</li>`);
+		return `<ul>${items}</ul>`;
+	});
+	h = h.replace(/:::(\w*)[^\n]*\n([\s\S]*?):::/g, (_, _type, content) =>
+		`<div class="ai-box">${content.trim()}</div>`);
+	h = h.replace(/\n\n+/g, "</p><p>");
+	h = `<p>${h}</p>`;
+	h = h.replace(/<p>([\s\S]*?)<\/p>/g, (_, inner) => {
+		if (/^<(?:pre|div|h[34]|ul|blockquote|hr)/.test(inner.trim())) return inner;
+		return `<p>${inner}</p>`;
+	});
+	h = h.replace(/(?<!<\/pre>)\n/g, "<br>");
+	return h;
+}
+
+function _createAiDiv(tab) {
+	const div = el("div", { class: "tab-frame ai-frame" });
+
+	const header = el("div", { class: "ai-header" });
+	const sel = _mkAiDropdown(_aiModels, "claude-sonnet-5");
+
+	const wsLabel = el("label", { class: "ai-ws-label" });
+	const wsCheck = el("input", { type: "checkbox" });
+	const wsSlider = el("span", { class: "ai-ws-slider" });
+	const wsText = el("span", { class: "ai-ws-text" }, "web");
+	wsLabel.append(wsCheck, wsSlider, wsText);
+
+	const clearBtn = el("button", { class: "ai-clear-btn", type: "button" });
+	clearBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>`;
+	clearBtn.title = "clear chat";
+	clearBtn.addEventListener("click", () => {
+		tab.messages = [];
+		msgs.replaceChildren();
+	});
+	header.append(sel, wsLabel, clearBtn);
+
+	const msgs = el("div", { class: "ai-messages" });
+	msgs.addEventListener("click", (e) => {
+		const btn = e.target.closest(".ai-copy-btn");
+		if (!btn) return;
+		const code = btn.closest(".ai-code-wrap")?.querySelector("code")?.textContent ?? "";
+		navigator.clipboard.writeText(code).then(() => {
+			btn.textContent = "copied!";
+			setTimeout(() => (btn.textContent = "copy"), 1800);
+		}).catch(() => {});
+	});
+
+	const inputArea = el("div", { class: "ai-input-area" });
+	const textarea = el("textarea", { class: "ai-input", placeholder: "message...", rows: "1", spellcheck: "false" });
+	const autoResize = () => {
+		textarea.style.height = "auto";
+		textarea.style.height = Math.min(textarea.scrollHeight, 140) + "px";
+	};
+	textarea.addEventListener("input", autoResize);
+	textarea.addEventListener("keydown", (e) => {
+		if (e.key === "Enter" && !e.shiftKey) {
+			e.preventDefault();
+			const text = textarea.value.trim();
+			if (text) { textarea.value = ""; autoResize(); _aiSend(tab, text, msgs, sel, wsCheck); }
 		}
 	});
-	observer.observe(container, { childList: true, subtree: true });
+	const sendBtn = el("button", { class: "ai-send", type: "button" });
+	sendBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>`;
+	sendBtn.addEventListener("click", () => {
+		const text = textarea.value.trim();
+		if (text) { textarea.value = ""; autoResize(); _aiSend(tab, text, msgs, sel, wsCheck); }
+	});
+	inputArea.append(textarea, sendBtn);
+
+	div.append(header, msgs, inputArea);
+	tab.aiDiv = div;
+	ui.frames.append(div);
+	return div;
+}
+
+async function _aiSend(tab, text, msgs, sel, wsCheck) {
+	tab.messages.push({ role: "user", content: text });
+	const userDiv = el("div", { class: "ai-msg user" });
+	userDiv.innerHTML = _aiMd(text);
+	msgs.append(userDiv);
+	msgs.scrollTop = msgs.scrollHeight;
+
+	let searchCtx = "";
+	if (wsCheck?.checked) {
+		try {
+			const sr = await fetch(`/api/ai/search?q=${encodeURIComponent(text)}`);
+			const { results } = await sr.json();
+			if (results?.length) {
+				searchCtx = "\n\nWeb search results:\n" + results.map((r) =>
+					`[${r.title}](${r.url}): ${r.snippet}`).join("\n");
+			}
+		} catch {}
+	}
+
+	const thinkRow = el("div", { class: "ai-think-row" });
+	thinkRow.innerHTML = `<span class="ai-thinking">thinking...</span>`;
+	msgs.append(thinkRow);
+	msgs.scrollTop = msgs.scrollHeight;
+
+	const model = sel?.value || "claude-sonnet-5";
+	const history = tab.messages.slice(-20).map((m, i) =>
+		(m.role === "user" && i === tab.messages.length - 1 && searchCtx)
+			? { role: m.role, content: m.content + searchCtx }
+			: { role: m.role, content: m.content }
+	);
+
+	let aiDiv = null;
+	try {
+		const res = await fetch("/api/ai/chat", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({ model, messages: history, stream: true, max_tokens: 4096 }),
+		});
+		if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		let full = "";
+		const reader = res.body.getReader();
+		const dec = new TextDecoder();
+		while (true) {
+			const { done, value } = await reader.read();
+			if (done) break;
+			const chunk = dec.decode(value, { stream: true });
+			for (const line of chunk.split("\n")) {
+				if (!line.startsWith("data: ")) continue;
+				const data = line.slice(6).trim();
+				if (data === "[DONE]") { reader.cancel(); break; }
+				try {
+					const delta = JSON.parse(data).choices?.[0]?.delta?.content;
+					if (delta) {
+						full += delta;
+						if (!aiDiv) {
+							thinkRow.remove();
+							aiDiv = el("div", { class: "ai-msg ai" });
+							msgs.append(aiDiv);
+						}
+						aiDiv.innerHTML = _aiMd(full);
+						msgs.scrollTop = msgs.scrollHeight;
+					}
+				} catch {}
+			}
+		}
+		if (!aiDiv) thinkRow.remove();
+		tab.messages.push({ role: "assistant", content: full });
+	} catch (err) {
+		thinkRow.remove();
+		const errDiv = el("div", { class: "ai-msg ai" });
+		errDiv.innerHTML = `<span class="ai-err">error: ${err.message}</span>`;
+		msgs.append(errDiv);
+	}
 }
 
 function openGameFullscreen(src, title) {
@@ -729,11 +1120,11 @@ function renderPanelBookmarks() {
 
 function renderSettings() {
 	const s = settings.get();
-	$("set-transport").value = engine?.transportKind ?? s.transport;
+	$("cfg-e1").value = engine?._tK ?? s._m;
 	$("set-adblock").checked = s.blockAds;
 	$("set-rewriterlogs").checked = s.rewriterLogs;
-	$("set-wisp").value = s._srvUrl;
-	$("set-wisp").placeholder = defaultServerUrl();
+	$("cfg-s1").value = s._srvUrl;
+	$("cfg-s1").placeholder = _nrc() || "auto";
 	const search = $("set-search");
 	if (!search.options.length) {
 		for (const [id, eng] of Object.entries(SEARCH_ENGINES)) search.append(new Option(eng.name, id));
@@ -780,10 +1171,10 @@ function renderDiag() {
 
 function renderAbout() {
 	const rows = [
-		["version", "Umbrella 1.0.0"],
+		["version", "v1.0.0"],
 		["engine", `${versionInfo.version} (${versionInfo.build})`],
 		["runtime", globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")]?.VERSION],
-		["transport", engine?.transportKind ?? settings.get().transport],
+		["mode", engine?._tK ?? settings.get()._m],
 	];
 	$("about-versions").replaceChildren(...rows.flatMap(([k, v]) => [el("dt", {}, k), el("dd", {}, v)]));
 }
@@ -888,21 +1279,21 @@ async function doLogout() {
 
 fetchUser();
 
-$("set-transport").addEventListener("change", async (e) => {
+$("cfg-e1").addEventListener("change", async (e) => {
 	const kind = e.target.value;
-	if (!engine || kind === engine.transportKind) return;
+	if (!engine || kind === engine._tK) return;
 	try {
-		await engine.setTransport(kind);
+		await engine._sT(kind);
 		toast(`now using ${kind}`);
 	} catch (err) {
 		toast(`couldn't start ${kind}: ${err.message}`, 4000);
-		e.target.value = engine.transportKind;
+		e.target.value = engine._tK;
 	}
 });
 $("set-search").addEventListener("change", (e) => settings.set({ searchEngine: e.target.value }));
 $("set-adblock").addEventListener("change", (e) => settings.set({ blockAds: e.target.checked }));
 $("set-rewriterlogs").addEventListener("change", (e) => settings.set({ rewriterLogs: e.target.checked }));
-$("set-wisp").addEventListener("change", (e) => {
+$("cfg-s1").addEventListener("change", (e) => {
 	const v = e.target.value.trim();
 	if (v && (!/^wss?:\/\//.test(v) || !v.endsWith("/"))) {
 		toast("server url must start with ws:// or wss:// and end with /", 4000);
@@ -922,7 +1313,24 @@ $("clear-data").addEventListener("click", async () => {
 	toast("proxied site data cleared");
 });
 $("about-link").addEventListener("click", () => openPanel("about"));
-$("games-btn").addEventListener("click", () => openPanel("games"));
+
+function openAiTab() {
+	const existing = tabs.find((t) => t.type === "ai");
+	if (existing) return activate(existing);
+	const tab = makeAiTab();
+	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
+	activate(tab);
+}
+$("ai-btn").addEventListener("click", openAiTab);
+
+function openGamesTab() {
+	const existing = tabs.find((t) => t.type === "games");
+	if (existing) return activate(existing);
+	const tab = makeGamesTab();
+	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
+	activate(tab);
+}
+$("games-btn").addEventListener("click", openGamesTab);
 
 ui.omnibox.addEventListener("submit", (e) => {
 	e.preventDefault();
@@ -1000,17 +1408,29 @@ async function boot() {
 	renderTabs();
 	renderEssentials();
 
+	ui.boot.classList.add("done");
+	setTimeout(() => (ui.boot.hidden = true), 250);
+
+	if (tabs.length) {
+		activate(restoredActive ?? tabs[tabs.length - 1]);
+	} else {
+		openTab();
+	}
+
+	const engStatus = $("engine-status");
+	if (engStatus) engStatus.hidden = false;
+
 	try {
 		engine = await createEngine({ onRewriteError: () => renderDiag() }, (s) => (ui.bootStatus.textContent = s));
 	} catch (err) {
-		console.error("[umbrella] boot failed", err);
-		ui.bootStatus.textContent = `couldn't start the engine: ${err.message}`;
-		ui.boot.classList.add("failed");
+		console.error("[app] boot failed", err);
+		if (engStatus) engStatus.textContent = `engine failed: ${err.message}`;
+		toast(`engine failed to start: ${err.message}`, 6000);
 		return;
 	}
 
-	ui.boot.classList.add("done");
-	setTimeout(() => (ui.boot.hidden = true), 250);
+	if (engStatus) engStatus.hidden = true;
+	toast("ready to browse");
 	(window.requestIdleCallback ?? setTimeout)(prefetchIcons, { timeout: 3000 });
 
 	const target = go ? resolveInput(go) : null;
@@ -1018,10 +1438,16 @@ async function boot() {
 		const tab = makeTab();
 		tabs.push(tab);
 		navigate(target, { tab });
-	} else if (tabs.length) {
-		activate(restoredActive ?? tabs[tabs.length - 1]);
+	} else if (active?.type === "browser" && active.url && !active.handle) {
+		ensureFrame(active).go(active.url);
 	} else {
-		openTab();
+		for (const t of tabs) {
+			if (t.type === "browser" && t.url && !t.handle) {
+				ensureFrame(t).go(t.url);
+				if (t !== active) activate(t);
+				break;
+			}
+		}
 	}
 }
 

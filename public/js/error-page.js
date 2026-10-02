@@ -30,13 +30,13 @@ const KINDS = [
 		id: "tls",
 		test: /(error code (35|51|53|54|58|59|60|77|80|83|90|91):|tls|ssl|certificate|handshake|x509|rustls)/i,
 		title: "secure connection failed",
-		hint: "the site's tls setup didn't work with this transport. switching transport in settings often fixes it.",
+		hint: "the site's tls setup didn't work with this mode. switching mode in settings often fixes it.",
 	},
 	{
-		id: "transport",
-		test: /(wisp|websocket|transport|socket (is )?closed|ws:|wss:)/i,
-		title: "lost connection to the proxy server",
-		hint: "the tunnel to the umbrella server dropped. reload, or switch transport in settings.",
+		id: "mode",
+		test: /(websocket|socket (is )?closed|ws:|wss:)/i,
+		title: "server connection lost",
+		hint: "the server connection dropped. reload, or switch mode in settings.",
 	},
 ];
 
@@ -49,12 +49,12 @@ const UNKNOWN = {
 const AMBIGUOUS =
 	/(IncompleteMessage|connection closed before message completed|handshake eof|UnexpectedEof|error code (7|35|52|55|56):|Could not connect)/i;
 
-export function classifyError(error) {
+export function _cE(error) {
 	const text = String(error?.message ?? error ?? "");
 	return KINDS.find((k) => k.test.test(text)) ?? UNKNOWN;
 }
 
-export function needsDiagnosis(error, kind) {
+export function _nD(error, kind) {
 	return kind.id === "unknown" || AMBIGUOUS.test(String(error?.message ?? error ?? ""));
 }
 
@@ -66,7 +66,7 @@ const DIAGNOSED = {
 	unreachable: "refused",
 };
 
-export async function diagnoseKind(targetUrl) {
+export async function _dK(targetUrl) {
 	let url;
 	try {
 		url = new URL(targetUrl);
@@ -114,33 +114,33 @@ button.primary{background:var(--accent);border-color:var(--accent);color:var(--b
 button.primary:hover{filter:brightness(1.08)}
 `;
 
-export function renderErrorPage({ url, error, kind = classifyError(error), status = 502 }) {
+export function _rE({ url, error, kind = _cE(error), status = 502 }) {
 	const detail = String(error?.stack || error?.message || error || "").slice(0, 1500);
 	const html = `<!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>${escape(kind.title)} | Umbrella</title><style>${STYLE}</style></head>
+<title>${escape(kind.title)} </title><style>${STYLE}</style></head>
 <body><main class="card">
-<div class="brand"><i></i>umbrella</div>
+<div class="brand"><i></i></div>
 <h1>${escape(kind.title)}</h1>
 <p>${escape(kind.hint)}</p>
 <span class="url">${escape(url)}</span>
 <div class="row">
 <button class="primary" id="retry">try again</button>
-<button id="transport">switch transport</button>
+<button id="mode">switch mode</button>
 <button id="home">home</button>
 </div>
 <details><summary>technical details</summary><code>${escape(kind.id)}: ${escape(detail)}</code></details>
 </main>
 <script>
-const send = (action) => parent.postMessage({ __nc_m9d1: action }, location.origin);
+const send = (action) => parent.postMessage({ _m9k: action }, location.origin);
 document.getElementById("retry").onclick = () => location.reload();
-document.getElementById("transport").onclick = () => send("switch-transport");
+document.getElementById("mode").onclick = () => send("_m9-st");
 document.getElementById("home").onclick = () => send("home");
 </script></body></html>`;
 	return {
 		body: html,
 		status,
-		statusText: "Umbrella Error",
+		statusText: "Page Error",
 		headers: [
 			["content-type", "text/html; charset=utf-8"],
 			["cache-control", "no-store"],
@@ -148,11 +148,11 @@ document.getElementById("home").onclick = () => send("home");
 	};
 }
 
-export function renderBlockedPage(url) {
+export function _rB(url) {
 	const kind = {
 		id: "adblock",
 		title: "blocked by the ad blocker",
-		hint: "this address is on umbrella's ad and tracker list. you can turn blocking off in settings.",
+		hint: "this address is on the ad and tracker list. you can turn blocking off in settings.",
 	};
-	return renderErrorPage({ url, error: "blocked by content blocker", kind, status: 403 });
+	return _rE({ url, error: "blocked by content blocker", kind, status: 403 });
 }

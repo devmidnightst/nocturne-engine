@@ -25,6 +25,7 @@ import { packageDir as pkgDir } from "./packages.js";
 import { createWispHandler } from "./wisp.js";
 import { createAuthRouter, authMiddleware } from "./auth.js";
 import { createCaptchaRouter } from "./captcha.js";
+import { createAiRouter } from "./ai.js";
 
 const DIST = {
 	scramjet: scramjetDistDir(),
@@ -113,12 +114,16 @@ app.get("/assets/r/sw.js", (req, res) => {
 	assetHeaders(res, ".js");
 	res.sendFile(path.join(DIST.controller, "controller.sw.js"));
 });
-app.use("/assets/r", express.static(DIST.scramjet, staticOpts));
-app.use("/assets/c", express.static(DIST.controller, staticOpts));
 app.get("/assets/r/transport.epoxy.mjs", (req, res) => {
 	assetHeaders(res, ".mjs");
 	res.sendFile(path.join(DIST.epoxy, "index.mjs"));
 });
+app.get("/assets/r/transport.alt.mjs", (req, res) => {
+	assetHeaders(res, ".mjs");
+	res.sendFile(path.join(DIST.epoxy, "index.mjs"));
+});
+app.use("/assets/r", express.static(DIST.scramjet, staticOpts));
+app.use("/assets/c", express.static(DIST.controller, staticOpts));
 
 // the service worker must never be cached, or users get stuck on old versions
 app.get("/sw.js", (req, res) => {
@@ -132,6 +137,7 @@ app.get("/sw.js", (req, res) => {
 
 app.use("/api/auth", createAuthRouter());
 app.use("/api/captcha", createCaptchaRouter());
+app.use("/api/ai", createAiRouter());
 
 // ---- api ----
 

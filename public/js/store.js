@@ -1,5 +1,5 @@
 const PREFIX = "_p8q2:";
-const MIGRATE_PREFIXES = ["nocturne:", "umbrella:"];
+const MIGRATE_PREFIXES = ["nocturne:", "_p8q2_old:"];
 
 try {
 	for (const key of Object.keys(localStorage)) {
@@ -36,7 +36,7 @@ export const SEARCH_ENGINES = {
 };
 
 const DEFAULT_SETTINGS = {
-	transport: "libcurl",
+	_m: "lc",
 	_srvUrl: "",
 	searchEngine: "duckduckgo",
 	blockAds: true,
@@ -63,13 +63,13 @@ export const settings = {
 	},
 };
 
-export function defaultServerUrl() {
+export function _dsu() {
 	return `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/wisp/`;
 }
 
-export function serverUrl() {
+export function _su() {
 	const custom = (settings.get()._srvUrl || "").trim();
-	return custom || defaultServerUrl();
+	return custom || _dsu();
 }
 
 export const bookmarks = {

@@ -1,5 +1,5 @@
 const { ManagedPlugin } = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
-const { ScramjetHeaders } = globalThis[atob("JHNjcmFtamV0")];
+const { [atob("U2NyYW1qZXRIZWFkZXJz")]: _SH } = globalThis[atob("JHNjcmFtamV0")];
 
 const CAPTCHA_SCRIPT_PATTERNS = [
 	{ pattern: /hcaptcha\.com\/1\/api\.js/i, type: "hcaptcha" },
@@ -76,7 +76,7 @@ function createOverlay(win, doc, info) {
 	Object.assign(text.style, {
 		fontSize: "12px", color: "#aaa", margin: "0 0 12px", lineHeight: "1.5",
 	});
-	text.textContent = "this page uses a captcha that may not work through the proxy. you can try auto-solving.";
+	text.textContent = "this page uses a captcha that may not work here. you can try auto-solving.";
 
 	const actions = doc.createElement("div");
 	Object.assign(actions.style, { display: "flex", gap: "8px", flexWrap: "wrap" });
@@ -180,9 +180,9 @@ function injectToken(doc, type, token) {
 	}
 }
 
-export class CaptchaPlugin extends ManagedPlugin {
+export class _CP extends ManagedPlugin {
 	constructor() {
-		super("umbrella-captcha", []);
+		super("_cp8", []);
 		this._detected = new WeakSet();
 	}
 

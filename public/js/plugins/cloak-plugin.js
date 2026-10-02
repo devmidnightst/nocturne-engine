@@ -1,7 +1,7 @@
 const { ManagedPlugin } = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
 
-const HIDDEN_PREFIXES = ["$scramjet", "__nc_", "_p8q2"];
-const HIDDEN_IDB_NAMES = ["scramjet-http-cache", "scramjet-http-cache-v2"];
+const HIDDEN_PREFIXES = [atob("JHNjcmFtamV0"), "__nc_", "_p8q2"];
+const HIDDEN_IDB_NAMES = [atob("c2NyYW1qZXQtaHR0cC1jYWNoZQ=="), atob("c2NyYW1qZXQtaHR0cC1jYWNoZS12Mg==")];
 
 function shouldHide(name) {
 	if (typeof name !== "string") return false;
@@ -11,9 +11,9 @@ function shouldHide(name) {
 	return false;
 }
 
-export class CloakPlugin extends ManagedPlugin {
+export class _CK extends ManagedPlugin {
 	constructor() {
-		super("umbrella-cloak", []);
+		super("_ck7", []);
 	}
 
 	install(frame) {
@@ -163,7 +163,7 @@ export class CloakPlugin extends ManagedPlugin {
 				if (type === "resource") {
 					return entries.filter((e) => {
 						const n = e.name || "";
-						return !n.includes("/~/xf/") && !n.includes("scramjet") && !n.includes("__nc_");
+						return !n.includes("/~/xf/") && !n.includes(atob("c2NyYW1qZXQ=")) && !n.includes("__nc_");
 					});
 				}
 				return entries;
@@ -176,7 +176,7 @@ export class CloakPlugin extends ManagedPlugin {
 				win.Performance.prototype.getEntries = function getEntries() {
 					return nativeGetAll.call(this).filter((e) => {
 						const n = e.name || "";
-						return !n.includes("/~/xf/") && !n.includes("scramjet") && !n.includes("__nc_");
+						return !n.includes("/~/xf/") && !n.includes(atob("c2NyYW1qZXQ=")) && !n.includes("__nc_");
 					});
 				};
 			} catch {}

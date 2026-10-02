@@ -6,10 +6,10 @@
 		<meta name="theme-color" content="#efeff1" media="(prefers-color-scheme: light)" />
 		<meta name="theme-color" content="#151517" media="(prefers-color-scheme: dark)" />
 		<meta name="color-scheme" content="light dark" />
-		<meta name="description" content="Umbrella, fast and private browsing." />
-		<title>Umbrella</title>
+		<meta name="description" content="Fast and private browsing." />
+		<title>Browse</title>
 		<link rel="icon" href="/img/logo.svg" type="image/svg+xml" />
-		<link rel="stylesheet" href="/css/umbrella.css" />
+		<link rel="stylesheet" href="/css/app.css" />
 		<link rel="stylesheet" href="/css/auth.css" />
 
 		<script src="/assets/r/runtime.js"></script>
@@ -106,7 +106,7 @@
 				<div class="banner-actions">
 					<button class="chip" data-action="reload">reload</button>
 					<button class="chip" data-action="compat">compat mode</button>
-					<button class="chip" data-action="transport">switch transport</button>
+					<button class="chip" data-action="mode">switch mode</button>
 					<button class="chip ghost" data-action="dismiss" aria-label="dismiss">✕</button>
 				</div>
 			</div>
@@ -114,7 +114,7 @@
 			<section class="home" id="home-view">
 				<div class="hero">
 					<img class="logo" src="/img/logo.svg" alt="" width="48" height="48" />
-					<h1>Umbrella</h1>
+					<h1>Browse</h1>
 					<form class="hero-search" id="hero-form" autocomplete="off">
 						<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6.5" /><path d="M16 16l4 4" /></svg>
 						<input
@@ -127,9 +127,14 @@
 							aria-label="search or url"
 						/>
 					</form>
-					<button class="credit" id="games-btn" type="button">games</button>
-						<a class="credit" id="credit" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by <strong>midnight</strong></a>
+					<div class="hero-btns">
+							<button class="credit" id="games-btn" type="button">▦ games</button>
+							<button class="credit" id="ai-btn" type="button">✦ AI</button>
+							<a class="credit" id="credit" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">by <strong>midnight</strong></a>
+						</div>
+						<p class="engine-status" id="engine-status" hidden>⟳ engine starting…</p>
 				</div>
+
 				<footer class="about">
 					<button class="link-btn" id="about-link">about</button>
 				</footer>
@@ -139,7 +144,7 @@
 
 			<div class="boot" id="boot">
 				<img class="logo" src="/img/logo.svg" alt="" width="40" height="40" />
-				<p id="boot-status">starting umbrella</p>
+				<p id="bs-0">loading</p>
 			</div>
 		</main>
 
@@ -148,7 +153,6 @@
 				<button role="tab" data-tab="settings" class="active">settings</button>
 				<button role="tab" data-tab="history">history</button>
 				<button role="tab" data-tab="bookmarks">bookmarks</button>
-				<button role="tab" data-tab="games">games</button>
 				<button role="tab" data-tab="account">account</button>
 				<button role="tab" data-tab="about">about</button>
 				<button class="icon-btn small close" id="panel-close" aria-label="close">
@@ -160,10 +164,10 @@
 			<div class="tab-slider" id="tab-slider">
 				<div class="tab-body" data-body="settings">
 					<label class="field">
-						<span>transport</span>
-						<select id="set-transport">
-							<option value="libcurl">libcurl (recommended)</option>
-							<option value="epoxy">epoxy (alt tls)</option>
+						<span>mode</span>
+						<select id="cfg-e1">
+							<option value="lc">standard (recommended)</option>
+							<option value="ep">alternate</option>
 						</select>
 						<small>if a site fails to load or tls errors show up, try the other one.</small>
 					</label>
@@ -177,8 +181,8 @@
 					</label>
 					<label class="field">
 						<span>custom server</span>
-						<input type="text" id="set-wisp" spellcheck="false" placeholder="same server (default)" />
-						<small>leave empty to use this server. must end with a slash.</small>
+						<input type="text" id="cfg-s1" spellcheck="false" placeholder="auto" />
+						<small>leave empty for auto. must end with a slash.</small>
 					</label>
 					<div class="field">
 						<span>compat mode sites</span>
@@ -205,20 +209,16 @@
 					<ul id="panel-bookmarks" class="link-list"></ul>
 				</div>
 
-				<div class="tab-body games-body" data-body="games">
-					<div id="games"></div>
-				</div>
-
 				<div class="tab-body" data-body="account">
 					<div id="account-section"></div>
 				</div>
 
 				<div class="tab-body about-body" data-body="about">
 					<img src="/img/logo.svg" alt="" width="48" height="48" />
-					<h3>Umbrella</h3>
-					<p><a class="link-btn" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">Umbrella by midnight</a></p>
+					<h3>About</h3>
+					<p><a class="link-btn" href="https://github.com/devmidnightst/nocturne-engine" target="_blank" rel="noopener">by midnight</a></p>
 <dl id="about-versions"></dl>
-					<p class="muted">the proxy engine and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
+					<p class="muted">the engine and its packages are licensed under the GNU AGPL v3. if you run a modified copy publicly, publish your source.</p>
 				</div>
 			</div>
 		</aside>
