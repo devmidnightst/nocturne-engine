@@ -398,10 +398,10 @@ export async function createEngine(events = {}, onStatus) {
 		},
 		async _sT(kind) {
 			const next = await _cT(kind);
-			controller._sT(next);
+			controller.setTransport(next);
 			_t = next;
 			for (const t of tabs) t.frame.fetchHandler.client.transport = t.perFrame;
-			settings.set({ _t: kind });
+			settings.set({ _m: kind });
 			return kind;
 		},
 		setCompat(origin, on) {

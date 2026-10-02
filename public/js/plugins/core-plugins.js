@@ -8,7 +8,7 @@ import {
 } from "../error-page.js";
 
 const { ManagedPlugin } = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
-const { _SH } = globalThis[atob("JHNjcmFtamV0")];
+const { [atob("U2NyYW1qZXRIZWFkZXJz")]: _SH } = globalThis[atob("JHNjcmFtamV0")];
 
 const isNavigation = (dest) => dest === "document" || dest === "iframe" || dest === "frame";
 
