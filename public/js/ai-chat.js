@@ -1,0 +1,778 @@
+const MODELS = [
+	{ id: "claude-sonnet-5", label: "claude sonnet 5", p: "anthropic" },
+	{ id: "claude-opus-5", label: "claude opus 5", p: "anthropic" },
+	{ id: "claude-opus-4-8", label: "claude opus 4.8", p: "anthropic" },
+	{ id: "claude-fable-5-1", label: "claude fable 5.1", p: "anthropic" },
+	{ id: "gpt-5.6-luna", label: "gpt 5.6 luna", p: "openai" },
+	{ id: "gpt-6-astra", label: "gpt 6 astra", p: "openai" },
+	{ id: "gpt-5.6-sol", label: "gpt 5.6 sol", p: "openai" },
+	{ id: "gpt-5.6-terra", label: "gpt 5.6 terra", p: "openai" },
+	{ id: "gpt-5.5", label: "gpt 5.5", p: "openai" },
+	{ id: "gpt-5.4-mini", label: "gpt 5.4 mini", p: "openai" },
+	{ id: "gpt-4.1", label: "gpt 4.1", p: "openai" },
+	{ id: "gpt-4o", label: "gpt 4o", p: "openai" },
+	{ id: "kimi-k3", label: "kimi k3", p: "moonshot" },
+	{ id: "kimi-k2.7-code", label: "kimi k2.7 code", p: "moonshot" },
+	{ id: "grok-4.6", label: "grok 4.6", p: "xai" },
+	{ id: "deepseek-v4-pro", label: "deepseek v4 pro", p: "deepseek" },
+	{ id: "deepseek-v4-flash", label: "deepseek v4 flash", p: "deepseek" },
+	{ id: "deepseek-v3.2", label: "deepseek v3.2", p: "deepseek" },
+	{ id: "glm-5.3", label: "glm 5.3", p: "zai" },
+	{ id: "gemini-2.5-flash-lite", label: "gemini 2.5 flash", p: "google" },
+	{ id: "gemma-4-26b", label: "gemma 4 26b", p: "google" },
+	{ id: "qwen-3.8-max", label: "qwen 3.8 max", p: "qwen" },
+	{ id: "qwen-3.7-plus", label: "qwen 3.7 plus", p: "qwen" },
+	{ id: "command-a-plus", label: "command a+", p: "cohere" },
+	{ id: "llama-3.3-70b-instruct", label: "llama 3.3 70b", p: "meta" },
+	{ id: "mistral-small-3.2-24b-instruct-2506", label: "mistral small 3.2", p: "mistral" },
+];
+
+const DEFAULT_MODEL = "claude-sonnet-5";
+const STORE_KEY = "_p8q2:ai";
+const MAX_CHATS = 100;
+const MAX_TEXT_FILE = 200 * 1024;
+const MAX_IMAGE_EDGE = 1280;
+
+const ICONS = {
+	newChat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6"/><path d="M9 10h6"/>',
+	search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
+	settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
+	plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+	globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
+	up: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
+	stop: '<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/>',
+	chevron: '<path d="m6 9 6 6 6-6"/>',
+	x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
+	trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+	panel: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
+	file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+	check: '<path d="M20 6 9 17l-5-5"/>',
+};
+
+const isMac = /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
+
+function h(tag, props = {}, ...children) {
+	const node = document.createElement(tag);
+	for (const [k, v] of Object.entries(props)) {
+		if (k === "class") node.className = v;
+		else if (k === "html") node.innerHTML = v;
+		else if (k.startsWith("on")) node.addEventListener(k.slice(2), v);
+		else if (v !== undefined && v !== null && v !== false) node.setAttribute(k, v === true ? "" : v);
+	}
+	for (const c of children) if (c != null) node.append(c);
+	return node;
+}
+
+function svg(name, cls = "aic-ico") {
+	return `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[name]}</svg>`;
+}
+
+function iconBtn(name, label, cls = "") {
+	return h("button", { class: `aic-icon-btn ${cls}`.trim(), type: "button", title: label, "aria-label": label, html: svg(name) });
+}
+
+function esc(s) {
+	return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+}
+
+function inline(s) {
+	return s
+		.replace(/`([^`\n]+)`/g, (_, c) => `<code>${c}</code>`)
+		.replace(/\[([^\]\n]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, t, u) => `<a href="${u}" target="_blank" rel="noopener noreferrer">${t}</a>`)
+		.replace(/\*\*(.+?)\*\*/g, "<strong>$1</strong>")
+		.replace(/(^|[^*])\*([^*\n]+)\*/g, "$1<em>$2</em>");
+}
+
+function md(text) {
+	const blocks = [];
+	let src = esc(text).replace(/```(\w*)[^\n]*\n?([\s\S]*?)(?:```|$)/g, (_, lang, code) => {
+		blocks.push(`<div class="aic-code"><div class="aic-code-head"><span>${lang || "code"}</span><button class="aic-copy" type="button">copy</button></div><pre><code>${code.replace(/\n$/, "")}</code></pre></div>`);
+		return `\n\u0000${blocks.length - 1}\u0000\n`;
+	});
+	const out = [];
+	let list = null;
+	let para = [];
+	const flushPara = () => {
+		if (para.length) out.push(`<p>${para.map(inline).join("<br>")}</p>`);
+		para = [];
+	};
+	const flushList = () => {
+		if (list) out.push(`<${list.tag}>${list.items.map((i) => `<li>${inline(i)}</li>`).join("")}</${list.tag}>`);
+		list = null;
+	};
+	for (const line of src.split("\n")) {
+		let m;
+		if ((m = line.match(/^\u0000(\d+)\u0000$/))) {
+			flushPara(); flushList();
+			out.push(blocks[+m[1]]);
+		} else if (!line.trim()) {
+			flushPara(); flushList();
+		} else if ((m = line.match(/^(#{1,4})\s+(.+)$/))) {
+			flushPara(); flushList();
+			const lvl = Math.min(m[1].length + 2, 5);
+			out.push(`<h${lvl}>${inline(m[2])}</h${lvl}>`);
+		} else if ((m = line.match(/^\s*[-*]\s+(.+)$/))) {
+			flushPara();
+			if (list?.tag !== "ul") { flushList(); list = { tag: "ul", items: [] }; }
+			list.items.push(m[1]);
+		} else if ((m = line.match(/^\s*\d+[.)]\s+(.+)$/))) {
+			flushPara();
+			if (list?.tag !== "ol") { flushList(); list = { tag: "ol", items: [] }; }
+			list.items.push(m[1]);
+		} else if ((m = line.match(/^&gt;\s?(.*)$/))) {
+			flushPara(); flushList();
+			out.push(`<blockquote>${inline(m[1])}</blockquote>`);
+		} else if (/^(-{3,}|\*{3,})$/.test(line.trim())) {
+			flushPara(); flushList();
+			out.push("<hr>");
+		} else {
+			flushList();
+			para.push(line);
+		}
+	}
+	flushPara(); flushList();
+	return out.join("");
+}
+
+function loadState() {
+	try {
+		const s = JSON.parse(localStorage.getItem(STORE_KEY) || "{}");
+		return {
+			chats: Array.isArray(s.chats) ? s.chats : [],
+			model: MODELS.some((m) => m.id === s.model) ? s.model : DEFAULT_MODEL,
+			web: !!s.web,
+			system: typeof s.system === "string" ? s.system : "",
+		};
+	} catch {
+		return { chats: [], model: DEFAULT_MODEL, web: false, system: "" };
+	}
+}
+
+function persistable(chat) {
+	return {
+		...chat,
+		messages: chat.messages.map((m) => ({
+			...m,
+			files: m.files?.map((f) => (f.kind === "image" ? { kind: "image", name: f.name } : f)),
+		})),
+	};
+}
+
+function readFileAsText(file) {
+	return new Promise((res, rej) => {
+		const r = new FileReader();
+		r.onload = () => res(String(r.result));
+		r.onerror = () => rej(r.error);
+		r.readAsText(file);
+	});
+}
+
+function readImage(file) {
+	return new Promise((res, rej) => {
+		const url = URL.createObjectURL(file);
+		const img = new Image();
+		img.onload = () => {
+			const scale = Math.min(1, MAX_IMAGE_EDGE / Math.max(img.width, img.height));
+			const c = document.createElement("canvas");
+			c.width = Math.round(img.width * scale);
+			c.height = Math.round(img.height * scale);
+			c.getContext("2d").drawImage(img, 0, 0, c.width, c.height);
+			URL.revokeObjectURL(url);
+			res(c.toDataURL("image/jpeg", 0.85));
+		};
+		img.onerror = () => { URL.revokeObjectURL(url); rej(new Error("couldn't read image")); };
+		img.src = url;
+	});
+}
+
+function timeGroup(ts) {
+	const day = 86400000;
+	const start = new Date(); start.setHours(0, 0, 0, 0);
+	if (ts >= start.getTime()) return "Today";
+	if (ts >= start.getTime() - day) return "Yesterday";
+	if (ts >= start.getTime() - 7 * day) return "Previous 7 days";
+	return "Older";
+}
+
+export function mountAiChat(root) {
+	const state = loadState();
+	let current = null;
+	let pending = [];
+	let controller = null;
+
+	const save = () => {
+		try {
+			state.chats = state.chats.slice(0, MAX_CHATS);
+			localStorage.setItem(STORE_KEY, JSON.stringify({ ...state, chats: state.chats.map(persistable) }));
+		} catch {}
+	};
+
+	const newBtn = h("button", { class: "aic-nav aic-nav-new", type: "button", html: `${svg("newChat")}<span>New chat</span>` });
+	const searchBtn = h("button", { class: "aic-nav", type: "button", html: `${svg("search")}<span>Search chats</span><kbd>${isMac ? "⌘K" : "Ctrl K"}</kbd>` });
+	const recentLabel = h("div", { class: "aic-label" }, "Recent");
+	const list = h("nav", { class: "aic-list" });
+	const settingsBtn = h("button", { class: "aic-nav", type: "button", html: `${svg("settings")}<span>Settings</span>` });
+	const side = h("aside", { class: "aic-side" },
+		h("div", { class: "aic-brand" }, "chat"),
+		h("div", { class: "aic-navs" }, newBtn, searchBtn),
+		recentLabel,
+		list,
+		h("div", { class: "aic-side-foot" }, settingsBtn),
+	);
+	const scrim = h("div", { class: "aic-scrim" });
+
+	const menuBtn = iconBtn("panel", "toggle sidebar", "aic-menu");
+	const topNew = iconBtn("newChat", "new chat", "aic-top-new");
+	const top = h("div", { class: "aic-top" }, menuBtn, h("div", { class: "aic-top-title" }), topNew);
+
+	const greet = h("h1", { class: "aic-greet", html: 'Hi, what\'s on <span>your mind</span>?' });
+	const hero = h("div", { class: "aic-hero" }, greet);
+	const thread = h("div", { class: "aic-thread" });
+	const scroller = h("div", { class: "aic-scroll" }, thread);
+
+	const fileInput = h("input", { type: "file", multiple: true, hidden: true, accept: "image/*,text/*,.md,.json,.js,.mjs,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.h,.cs,.go,.rs,.rb,.php,.lua,.sh,.yml,.yaml,.toml,.ini,.xml,.html,.css,.csv,.sql,.log" });
+	const attachBtn = iconBtn("plus", "attach files", "aic-attach");
+	const input = h("textarea", { class: "aic-input", placeholder: "Ask anything", rows: "1", spellcheck: "true" });
+	const webBtn = iconBtn("globe", "search the web", "aic-web");
+	const modelBtn = h("button", { class: "aic-model-btn", type: "button", "aria-haspopup": "listbox" });
+	const modelFilter = h("input", { class: "aic-model-filter", type: "text", placeholder: "search models", autocomplete: "off", spellcheck: "false" });
+	const modelList = h("div", { class: "aic-model-list", role: "listbox" });
+	const modelMenu = h("div", { class: "aic-model-menu" }, modelFilter, modelList);
+	const model = h("div", { class: "aic-model" }, modelBtn, modelMenu);
+	const sendBtn = h("button", { class: "aic-send", type: "button", "aria-label": "send", html: svg("up") });
+	const chips = h("div", { class: "aic-chips" });
+	const bar = h("div", { class: "aic-bar" },
+		chips,
+		h("div", { class: "aic-bar-row" }, attachBtn, input, webBtn, model, sendBtn),
+	);
+	const composer = h("div", { class: "aic-composer" }, bar, fileInput, h("p", { class: "aic-hint" }, "AI can make mistakes. Check important info."));
+	const main = h("section", { class: "aic-main" }, top, scroller, hero, composer);
+
+	const searchInput = h("input", { class: "aic-search-input", type: "text", placeholder: "Search chats", autocomplete: "off", spellcheck: "false" });
+	const searchResults = h("div", { class: "aic-search-results" });
+	const searchClose = iconBtn("x", "close");
+	const searchModal = h("div", { class: "aic-modal", role: "dialog", "aria-label": "search chats", hidden: true },
+		h("div", { class: "aic-modal-card aic-search-card" },
+			h("div", { class: "aic-search-head", html: svg("search") }, searchInput, searchClose),
+			searchResults,
+		),
+	);
+
+	const systemInput = h("textarea", { class: "aic-field", rows: "5", placeholder: "e.g. answer briefly and use simple words" });
+	const settingsClose = iconBtn("x", "close");
+	const settingsSave = h("button", { class: "aic-btn aic-btn-primary", type: "button" }, "Save");
+	const clearAll = h("button", { class: "aic-btn aic-btn-danger", type: "button" }, "Delete all chats");
+	const settingsModal = h("div", { class: "aic-modal", role: "dialog", "aria-label": "settings", hidden: true },
+		h("div", { class: "aic-modal-card aic-settings-card" },
+			h("div", { class: "aic-modal-head" }, h("h2", {}, "Settings"), settingsClose),
+			h("label", { class: "aic-field-label" }, "Custom instructions",
+				h("small", {}, "sent with every chat, so the model knows how you want answers"), systemInput),
+			h("div", { class: "aic-field-label" }, "Chat history",
+				h("small", {}, "chats are saved in this browser only")),
+			h("div", { class: "aic-modal-actions" }, clearAll, h("span", { class: "aic-grow" }), settingsSave),
+		),
+	);
+
+	root.classList.add("aic");
+	root.append(side, scrim, main, searchModal, settingsModal);
+
+	function setSidebar(open) {
+		root.classList.toggle("aic-side-open", open);
+	}
+
+	function renderModelBtn() {
+		const m = MODELS.find((x) => x.id === state.model) ?? MODELS[0];
+		modelBtn.innerHTML = `<span>${esc(m.label)}</span>${svg("chevron", "aic-ico aic-chev")}`;
+	}
+
+	function renderModelList() {
+		const q = modelFilter.value.trim().toLowerCase();
+		modelList.replaceChildren(...MODELS.filter((m) => !q || m.label.includes(q) || m.p.includes(q)).map((m) =>
+			h("button", {
+				class: `aic-model-opt${m.id === state.model ? " sel" : ""}`,
+				type: "button",
+				role: "option",
+				"aria-selected": m.id === state.model ? "true" : "false",
+				html: `<span class="aic-dot" data-p="${m.p}"></span><span class="aic-model-name">${esc(m.label)}</span><span class="aic-model-p">${m.p}</span>${m.id === state.model ? svg("check") : ""}`,
+				onclick: () => {
+					state.model = m.id;
+					save();
+					renderModelBtn();
+					closeModelMenu();
+					input.focus();
+				},
+			})));
+	}
+
+	function closeModelMenu() {
+		model.classList.remove("open");
+	}
+
+	modelBtn.addEventListener("click", (e) => {
+		e.stopPropagation();
+		const open = !model.classList.contains("open");
+		model.classList.toggle("open", open);
+		if (open) {
+			modelFilter.value = "";
+			renderModelList();
+			modelFilter.focus();
+			modelList.querySelector(".sel")?.scrollIntoView({ block: "nearest" });
+		}
+	});
+	modelFilter.addEventListener("input", renderModelList);
+	modelFilter.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") { e.preventDefault(); modelList.querySelector(".aic-model-opt")?.click(); }
+		if (e.key === "Escape") { closeModelMenu(); input.focus(); }
+	});
+	modelMenu.addEventListener("click", (e) => e.stopPropagation());
+	root.addEventListener("click", closeModelMenu);
+
+	function renderWeb() {
+		webBtn.classList.toggle("on", state.web);
+		webBtn.setAttribute("aria-pressed", state.web ? "true" : "false");
+		webBtn.title = state.web ? "web search on" : "search the web";
+	}
+	webBtn.addEventListener("click", () => {
+		state.web = !state.web;
+		save();
+		renderWeb();
+	});
+
+	function renderList() {
+		list.replaceChildren();
+		recentLabel.hidden = !state.chats.length;
+		for (const chat of state.chats) {
+			const del = h("button", { class: "aic-item-del", type: "button", title: "delete chat", "aria-label": "delete chat", html: svg("trash") });
+			const item = h("div", { class: `aic-item${chat === current ? " active" : ""}`, role: "button", tabindex: "0", title: chat.title },
+				h("span", {}, chat.title), del);
+			item.addEventListener("click", () => openChat(chat));
+			item.addEventListener("keydown", (e) => { if (e.key === "Enter") openChat(chat); });
+			del.addEventListener("click", (e) => {
+				e.stopPropagation();
+				deleteChat(chat);
+			});
+			list.append(item);
+		}
+	}
+
+	function setTitle() {
+		top.querySelector(".aic-top-title").textContent = current?.title || "";
+	}
+
+	function renderEmpty() {
+		const empty = !current?.messages.length;
+		main.classList.toggle("empty", empty);
+	}
+
+	function messageNode(m) {
+		const node = h("div", { class: `aic-msg ${m.role}` });
+		if (m.role === "user") {
+			if (m.files?.length) {
+				node.append(h("div", { class: "aic-msg-files" }, ...m.files.map((f) =>
+					f.kind === "image" && f.data
+						? h("img", { class: "aic-msg-img", src: f.data, alt: f.name })
+						: h("span", { class: "aic-chip static", html: `${svg(f.kind === "image" ? "file" : "file")}<span>${esc(f.name)}</span>` }))));
+			}
+			if (m.content) node.append(h("div", { class: "aic-bubble" }, m.content));
+		} else {
+			const body = h("div", { class: "aic-md", html: m.error ? `<p class="aic-err">${esc(m.content)}</p>` : md(m.content) });
+			node.append(body);
+			if (m.sources?.length) {
+				node.append(h("div", { class: "aic-sources" }, ...m.sources.map((s, i) =>
+					h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer", title: s.url }, `${i + 1}. ${s.title || s.url}`))));
+			}
+		}
+		return node;
+	}
+
+	function renderThread() {
+		thread.replaceChildren(...(current?.messages ?? []).map(messageNode));
+		renderEmpty();
+		setTitle();
+		scroller.scrollTop = scroller.scrollHeight;
+	}
+
+	function openChat(chat) {
+		if (controller) controller.abort();
+		current = chat;
+		pending = [];
+		renderChips();
+		renderThread();
+		renderList();
+		setSidebar(false);
+		input.focus({ preventScroll: true });
+	}
+
+	function newChat() {
+		if (controller) controller.abort();
+		current = null;
+		pending = [];
+		renderChips();
+		renderThread();
+		renderList();
+		setSidebar(false);
+		input.value = "";
+		autoResize();
+		input.focus({ preventScroll: true });
+	}
+
+	function deleteChat(chat) {
+		state.chats = state.chats.filter((c) => c !== chat);
+		save();
+		if (chat === current) newChat();
+		else renderList();
+	}
+
+	newBtn.addEventListener("click", newChat);
+	topNew.addEventListener("click", newChat);
+	menuBtn.addEventListener("click", () => setSidebar(!root.classList.contains("aic-side-open")));
+	scrim.addEventListener("click", () => setSidebar(false));
+
+	function renderChips() {
+		chips.replaceChildren(...pending.map((f, i) => {
+			const rm = h("button", { type: "button", "aria-label": `remove ${f.name}`, html: svg("x") });
+			rm.addEventListener("click", () => { pending.splice(i, 1); renderChips(); });
+			return h("span", { class: "aic-chip" },
+				f.kind === "image" ? h("img", { src: f.data, alt: "" }) : h("span", { html: svg("file") }),
+				h("span", { class: "aic-chip-name" }, f.name), rm);
+		}));
+		chips.hidden = !pending.length;
+		updateSend();
+	}
+
+	async function addFiles(files) {
+		for (const file of files) {
+			try {
+				if (file.type.startsWith("image/")) {
+					pending.push({ kind: "image", name: file.name || "image", data: await readImage(file) });
+				} else {
+					if (file.size > MAX_TEXT_FILE) { flash(`${file.name} is too big, text files up to 200 KB`); continue; }
+					const text = await readFileAsText(file);
+					if (/\u0000/.test(text.slice(0, 2000))) { flash(`${file.name} isn't a text file`); continue; }
+					pending.push({ kind: "text", name: file.name, text });
+				}
+			} catch {
+				flash(`couldn't read ${file.name}`);
+			}
+		}
+		renderChips();
+	}
+
+	let flashTimer;
+	const flashEl = h("div", { class: "aic-flash", hidden: true });
+	main.append(flashEl);
+	function flash(text) {
+		flashEl.textContent = text;
+		flashEl.hidden = false;
+		clearTimeout(flashTimer);
+		flashTimer = setTimeout(() => (flashEl.hidden = true), 3000);
+	}
+
+	attachBtn.addEventListener("click", () => fileInput.click());
+	fileInput.addEventListener("change", () => {
+		addFiles([...fileInput.files]);
+		fileInput.value = "";
+	});
+	input.addEventListener("paste", (e) => {
+		const files = [...(e.clipboardData?.files ?? [])];
+		if (files.length) { e.preventDefault(); addFiles(files); }
+	});
+	bar.addEventListener("dragover", (e) => { e.preventDefault(); bar.classList.add("drag"); });
+	bar.addEventListener("dragleave", () => bar.classList.remove("drag"));
+	bar.addEventListener("drop", (e) => {
+		e.preventDefault();
+		bar.classList.remove("drag");
+		if (e.dataTransfer?.files?.length) addFiles([...e.dataTransfer.files]);
+	});
+
+	function autoResize() {
+		input.style.height = "auto";
+		input.style.height = Math.min(input.scrollHeight, 220) + "px";
+		updateSend();
+	}
+
+	function updateSend() {
+		const busy = !!controller;
+		sendBtn.innerHTML = svg(busy ? "stop" : "up");
+		sendBtn.setAttribute("aria-label", busy ? "stop" : "send");
+		sendBtn.title = busy ? "stop" : "send";
+		sendBtn.classList.toggle("busy", busy);
+		sendBtn.disabled = !busy && !input.value.trim() && !pending.length;
+	}
+
+	input.addEventListener("input", autoResize);
+	input.addEventListener("keydown", (e) => {
+		if (e.key === "Enter" && !e.shiftKey && !e.isComposing) {
+			e.preventDefault();
+			if (!controller) submit();
+		}
+	});
+	sendBtn.addEventListener("click", () => {
+		if (controller) controller.abort();
+		else submit();
+	});
+
+	function toApi(m, extra = "") {
+		if (m.role !== "user") return { role: m.role, content: m.content };
+		let text = m.content;
+		for (const f of m.files ?? []) {
+			if (f.kind === "text") text += `\n\nAttached file "${f.name}":\n\`\`\`\n${f.text}\n\`\`\``;
+			else if (f.kind === "image" && !f.data) text += `\n\n[image "${f.name}" was attached earlier]`;
+		}
+		text += extra;
+		const images = (m.files ?? []).filter((f) => f.kind === "image" && f.data);
+		if (!images.length) return { role: "user", content: text };
+		return {
+			role: "user",
+			content: [
+				{ type: "text", text: text || "What's in this image?" },
+				...images.map((f) => ({ type: "image_url", image_url: { url: f.data } })),
+			],
+		};
+	}
+
+	async function submit() {
+		const text = input.value.trim();
+		if (!text && !pending.length) return;
+		if (!current) {
+			current = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: "", messages: [], updated: Date.now() };
+			state.chats.unshift(current);
+		}
+		const files = pending;
+		pending = [];
+		renderChips();
+		const userMsg = { role: "user", content: text, files: files.length ? files : undefined };
+		current.messages.push(userMsg);
+		if (!current.title) current.title = (text || files[0]?.name || "New chat").replace(/\s+/g, " ").slice(0, 60);
+		current.updated = Date.now();
+		state.chats = [current, ...state.chats.filter((c) => c !== current)];
+		input.value = "";
+		autoResize();
+		save();
+		renderList();
+		setTitle();
+		renderEmpty();
+		thread.append(messageNode(userMsg));
+
+		const chat = current;
+		const reply = { role: "assistant", content: "" };
+		const node = h("div", { class: "aic-msg assistant" });
+		const body = h("div", { class: "aic-md" });
+		const status = h("div", { class: "aic-status" }, h("span", { class: "aic-pulse" }), h("span", {}, state.web ? "searching the web" : "thinking"));
+		node.append(status, body);
+		thread.append(node);
+		scroller.scrollTop = scroller.scrollHeight;
+
+		controller = new AbortController();
+		const signal = controller.signal;
+		updateSend();
+
+		let extra = "";
+		if (state.web && text) {
+			try {
+				const r = await fetch(`/api/ai/search?q=${encodeURIComponent(text)}`, { signal });
+				const { results } = await r.json();
+				if (results?.length) {
+					reply.sources = results.map(({ url, title }) => ({ url, title }));
+					extra = "\n\nWeb search results (cite them as [n] when you use them):\n" +
+						results.map((r, i) => `[${i + 1}] ${r.title} (${r.url}): ${r.snippet}`).join("\n");
+				}
+			} catch {}
+			status.lastChild.textContent = "thinking";
+		}
+
+		const history = chat.messages.slice(-20).map((m, i, arr) => toApi(m, i === arr.length - 1 ? extra : ""));
+		if (state.system.trim()) history.unshift({ role: "system", content: state.system.trim() });
+
+		let stick = true;
+		const onScroll = () => { stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80; };
+		scroller.addEventListener("scroll", onScroll, { passive: true });
+		let frame = 0;
+		const paint = () => {
+			frame = 0;
+			body.innerHTML = md(reply.content);
+			if (stick) scroller.scrollTop = scroller.scrollHeight;
+		};
+
+		try {
+			if (signal.aborted) throw new DOMException("aborted", "AbortError");
+			const res = await fetch("/api/ai/chat", {
+				method: "POST",
+				headers: { "Content-Type": "application/json" },
+				body: JSON.stringify({ model: state.model, messages: history, stream: true, max_tokens: 4096 }),
+				signal,
+			});
+			if (!res.ok) {
+				let msg = `request failed (${res.status})`;
+				try {
+					const j = await res.json();
+					msg = j?.error?.message || j?.error || msg;
+				} catch {}
+				throw new Error(msg);
+			}
+			const reader = res.body.getReader();
+			const dec = new TextDecoder();
+			let buf = "";
+			outer: while (true) {
+				const { done, value } = await reader.read();
+				if (done) break;
+				buf += dec.decode(value, { stream: true });
+				let nl;
+				while ((nl = buf.indexOf("\n")) !== -1) {
+					const line = buf.slice(0, nl).trim();
+					buf = buf.slice(nl + 1);
+					if (!line.startsWith("data:")) continue;
+					const data = line.slice(5).trim();
+					if (data === "[DONE]") break outer;
+					try {
+						const j = JSON.parse(data);
+						if (j.error) throw new Error(j.error.message || String(j.error));
+						const delta = j.choices?.[0]?.delta?.content;
+						if (delta) {
+							if (!reply.content) status.remove();
+							reply.content += delta;
+							if (!frame) frame = requestAnimationFrame(paint);
+						}
+					} catch (err) {
+						if (!(err instanceof SyntaxError)) throw err;
+					}
+				}
+			}
+			reader.cancel().catch(() => {});
+			if (!reply.content) throw new Error("the model sent an empty reply, try another model");
+		} catch (err) {
+			if (err.name !== "AbortError" || !reply.content) {
+				if (err.name === "AbortError") reply.content = reply.content || "stopped";
+				else if (!reply.content) { reply.content = err.message || "something went wrong"; reply.error = true; }
+			}
+		} finally {
+			if (frame) cancelAnimationFrame(frame);
+			scroller.removeEventListener("scroll", onScroll);
+			if (controller?.signal === signal) controller = null;
+			updateSend();
+		}
+
+		status.remove();
+		chat.messages.push(reply);
+		chat.updated = Date.now();
+		save();
+		if (chat === current) {
+			node.replaceWith(messageNode(reply));
+			if (stick) scroller.scrollTop = scroller.scrollHeight;
+		}
+	}
+
+	thread.addEventListener("click", (e) => {
+		const btn = e.target.closest(".aic-copy");
+		if (!btn) return;
+		const code = btn.closest(".aic-code")?.querySelector("code")?.textContent ?? "";
+		navigator.clipboard.writeText(code).then(() => {
+			btn.textContent = "copied";
+			setTimeout(() => (btn.textContent = "copy"), 1500);
+		}).catch(() => {});
+	});
+
+	function openModal(m) {
+		m.hidden = false;
+		root.classList.add("aic-modal-open");
+	}
+	function closeModal(m) {
+		m.hidden = true;
+		if (searchModal.hidden && settingsModal.hidden) root.classList.remove("aic-modal-open");
+	}
+	for (const m of [searchModal, settingsModal]) {
+		m.addEventListener("click", (e) => { if (e.target === m) closeModal(m); });
+	}
+
+	function renderSearch() {
+		const q = searchInput.value.trim().toLowerCase();
+		const hits = state.chats.filter((c) => !q || c.title.toLowerCase().includes(q) ||
+			c.messages.some((m) => typeof m.content === "string" && m.content.toLowerCase().includes(q)));
+		if (!hits.length) {
+			searchResults.replaceChildren(h("p", { class: "aic-search-empty" }, state.chats.length ? "No chats found" : "No chats yet"));
+			return;
+		}
+		let group = "";
+		const nodes = [];
+		for (const c of hits.slice(0, 50)) {
+			const g = timeGroup(c.updated || 0);
+			if (g !== group) { group = g; nodes.push(h("div", { class: "aic-label" }, g)); }
+			let snippet = "";
+			if (q) {
+				const m = c.messages.find((m) => typeof m.content === "string" && m.content.toLowerCase().includes(q));
+				if (m) {
+					const i = m.content.toLowerCase().indexOf(q);
+					snippet = (i > 30 ? "…" : "") + m.content.slice(Math.max(0, i - 30), i + 70).replace(/\s+/g, " ");
+				}
+			}
+			nodes.push(h("button", {
+				class: "aic-search-hit",
+				type: "button",
+				onclick: () => { closeModal(searchModal); openChat(c); },
+			}, h("span", { html: svg("newChat") }), h("span", { class: "aic-search-text" },
+				h("strong", {}, c.title), snippet ? h("small", {}, snippet) : null)));
+		}
+		searchResults.replaceChildren(...nodes);
+	}
+
+	function openSearch() {
+		searchInput.value = "";
+		renderSearch();
+		openModal(searchModal);
+		searchInput.focus();
+	}
+	searchBtn.addEventListener("click", openSearch);
+	searchClose.addEventListener("click", () => closeModal(searchModal));
+	searchInput.addEventListener("input", renderSearch);
+	searchInput.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") { e.preventDefault(); searchResults.querySelector(".aic-search-hit")?.click(); }
+	});
+
+	settingsBtn.addEventListener("click", () => {
+		systemInput.value = state.system;
+		openModal(settingsModal);
+		systemInput.focus();
+	});
+	settingsClose.addEventListener("click", () => closeModal(settingsModal));
+	settingsSave.addEventListener("click", () => {
+		state.system = systemInput.value;
+		save();
+		closeModal(settingsModal);
+		flash("settings saved");
+	});
+	clearAll.addEventListener("click", () => {
+		if (!state.chats.length) return;
+		if (!confirm("delete every saved chat? this can't be undone.")) return;
+		state.chats = [];
+		save();
+		newChat();
+		closeModal(settingsModal);
+	});
+
+	const onKey = (e) => {
+		if (!root.isConnected) { document.removeEventListener("keydown", onKey, true); return; }
+		if (!root.classList.contains("active")) return;
+		if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
+			e.preventDefault();
+			e.stopPropagation();
+			if (searchModal.hidden) openSearch();
+			else closeModal(searchModal);
+		} else if (e.key === "Escape") {
+			if (!searchModal.hidden) closeModal(searchModal);
+			else if (!settingsModal.hidden) closeModal(settingsModal);
+			else if (model.classList.contains("open")) closeModelMenu();
+			else if (root.classList.contains("aic-side-open")) setSidebar(false);
+			else return;
+			e.stopPropagation();
+		}
+	};
+	document.addEventListener("keydown", onKey, true);
+
+	renderModelBtn();
+	renderWeb();
+	renderList();
+	renderThread();
+	renderChips();
+	autoResize();
+	return { focus: () => input.focus({ preventScroll: true }) };
+}
