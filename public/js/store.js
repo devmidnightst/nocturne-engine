@@ -40,6 +40,7 @@ const DEFAULT_SETTINGS = {
 	_srvUrl: "",
 	searchEngine: "duckduckgo",
 	blockAds: true,
+	adblockOff: [],
 	rewriterLogs: false,
 	compatSites: [],
 	sidebarCollapsed: false,

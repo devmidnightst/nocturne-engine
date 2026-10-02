@@ -26,6 +26,7 @@ import { createWispHandler } from "./wisp.js";
 import { createAuthRouter, authMiddleware } from "./auth.js";
 import { createCaptchaRouter } from "./captcha.js";
 import { createAiRouter } from "./ai.js";
+import { createFilterStore } from "./filters.js";
 
 const DIST = {
 	scramjet: scramjetDistDir(),
@@ -61,6 +62,8 @@ wispLogging.set_level(wispLogging[config.wisp.logLevel] ?? wispLogging.WARN);
 // ---------------------------------------------------------------------------
 // express app
 // ---------------------------------------------------------------------------
+
+const filters = createFilterStore(config.adblock);
 
 const app = express();
 app.disable("x-powered-by");
@@ -150,6 +153,9 @@ app.get("/api/health", (req, res) => {
 	});
 });
 
+// host lists for the client ad blocker, see filters.js
+app.get("/api/filters", (req, res) => filters.handler(req, res));
+
 // explains failed loads for the error page, see diagnose.js
 app.get("/api/diagnose", createDiagnoseHandler(config));
 
@@ -235,6 +241,7 @@ function main() {
 			console.log(`[umbrella] ${route}: ${b.applied.length} patches (${b.applied.join(", ") || "none"})`);
 			for (const s of b.skipped) console.warn(`[umbrella] patch skipped in ${route}: ${s.id} (${s.reason})`);
 		}
+		filters.start();
 		if (!config.domains.allow.length && !config.domains.file)
 			console.log("[umbrella] tls ask endpoint has no domains configured, it will refuse everything");
 		// tell pm2 we are ready (wait_ready: true in ecosystem.config.cjs)

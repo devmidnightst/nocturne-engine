@@ -2,6 +2,7 @@ import { createEngine, versionInfo } from "./engine.js";
 import { resolveInput } from "./omnibox.js";
 import { settings, bookmarks, history, session, icons, SEARCH_ENGINES } from "./store.js";
 import { _nrc, _nrp } from "./net-resolver.js";
+import { mountAiChat } from "./ai-chat.js";
 
 _nrp().catch(() => {});
 
@@ -390,14 +391,23 @@ function ensureFrame(tab) {
 async function _startGameFrame(tab) {
 	if (tab.iframe) return;
 	tab.loading = true;
+	tab.aiDiv?.remove();
+	tab.aiDiv = null;
 	scheduleRender();
 	try {
-		const { url } = await Lumin.getGameUrl(tab.gameId);
+		if (!(await _ensureLumin())) throw new Error("lumin");
+		const res = await Promise.race([
+			Lumin.getGameUrl(tab.gameId),
+			new Promise((_, reject) => setTimeout(() => reject(new Error("timeout")), 20000)),
+		]);
+		const url = typeof res === "string" ? res : res?.url;
+		if (!url) throw new Error("no url");
+		if (!tabs.includes(tab) || tab.iframe) return;
 		const iframe = el("iframe", {
 			class: "tab-frame",
 			id: `frame-${tab.id}`,
 			title: tab.title,
-			allow: "autoplay; fullscreen; pointer-lock; gamepad",
+			allow: "autoplay; fullscreen; pointer-lock; gamepad; clipboard-read; clipboard-write; keyboard-map; accelerometer; gyroscope",
 			allowfullscreen: "",
 		});
 		iframe.src = url;
@@ -408,8 +418,25 @@ async function _startGameFrame(tab) {
 		scheduleRender();
 	} catch {
 		tab.loading = false;
+		if (tabs.includes(tab)) _gameError(tab);
 		scheduleRender();
 	}
+}
+
+function _gameError(tab) {
+	const retry = el("button", { class: "games-browser-more" }, "try again");
+	const div = el("div", { class: "tab-frame games-browser-frame game-error" },
+		el("p", { class: "games-browser-status" }, `couldn't load ${tab.title || "this game"}`),
+		retry,
+	);
+	retry.addEventListener("click", () => {
+		if (tab._gameStarting) return;
+		tab._gameStarting = true;
+		_startGameFrame(tab).then(() => { tab._gameStarting = false; });
+	});
+	ui.frames.append(div);
+	tab.aiDiv = div;
+	showFrames();
 }
 
 function showFrames() {
@@ -444,6 +471,7 @@ function activate(tab) {
 	if (changed) {
 		hideBanner();
 		if (tab.health) showHealth(tab.health);
+		else if (tab.antiAdblock) showAntiAdblock(tab.antiAdblock);
 	}
 	syncChrome();
 	scheduleRender();
@@ -515,6 +543,7 @@ function navigate(raw, { tab, newTab = false } = {}) {
 	tab.url = url;
 	tab.title = "";
 	tab.health = null;
+	tab.antiAdblock = null;
 	ensureFrame(tab).go(url);
 	ui.address.blur();
 	activate(tab);
@@ -525,6 +554,7 @@ function showHome(tab = active) {
 	tab.url = "";
 	tab.title = "";
 	tab.health = null;
+	tab.antiAdblock = null;
 	tab.loading = false;
 	tab.handle?.blank();
 	if (tab === active) {
@@ -570,18 +600,36 @@ function tabEvents(tab) {
 			tab.health = info;
 			if (tab === active) showHealth(info);
 		},
+		onAntiAdblock(info) {
+			tab.antiAdblock = info;
+			if (tab === active && !tab.health) showAntiAdblock(info);
+		},
 	};
 }
 
 let bannerOrigin = null;
-function showBanner(title, detail, origin) {
+function showBanner(title, detail, origin, adblock = false) {
 	bannerOrigin = origin;
 	$("banner-title").textContent = title;
 	$("banner-detail").textContent = detail;
+	for (const btn of ui.banner.querySelectorAll("[data-action]")) {
+		if (btn.dataset.action !== "dismiss") btn.hidden = adblock !== (btn.dataset.action === "adblock-off");
+	}
 	const compatBtn = ui.banner.querySelector('[data-action="compat"]');
 	compatBtn.textContent = engine?.isCompat(origin) ? "turn off compat mode" : "compat mode";
-	compatBtn.hidden = !origin;
+	if (!adblock) compatBtn.hidden = !origin;
 	ui.banner.hidden = false;
+}
+
+function showAntiAdblock(info) {
+	const origin = originOf(info.url);
+	if (!origin) return;
+	showBanner(
+		"this site wants ad blocking off",
+		`${hostOf(origin)} seems to have noticed the ad blocker. turn it off for this site and reload?`,
+		origin,
+		true
+	);
 }
 
 function showHealth(info) {
@@ -609,7 +657,10 @@ ui.banner.addEventListener("click", async (e) => {
 	const action = e.target.closest("[data-action]")?.dataset.action;
 	if (!action) return;
 	if (action === "dismiss") {
-		if (active) active.health = null;
+		if (active) {
+			active.health = null;
+			active.antiAdblock = null;
+		}
 		return hideBanner();
 	}
 	hideBanner();
@@ -618,6 +669,13 @@ ui.banner.addEventListener("click", async (e) => {
 		const on = !engine.isCompat(bannerOrigin);
 		engine.setCompat(bannerOrigin, on);
 		toast(on ? `compat mode on for ${hostOf(bannerOrigin)}` : `compat mode off for ${hostOf(bannerOrigin)}`);
+		renderSettings();
+		return reloadActive();
+	}
+	if (action === "adblock-off" && bannerOrigin) {
+		engine.setAdblock(hostOf(bannerOrigin), false);
+		if (active) active.antiAdblock = null;
+		toast(`ad blocking off for ${hostOf(bannerOrigin)}`);
 		renderSettings();
 		return reloadActive();
 	}
@@ -823,29 +881,72 @@ async function _ensureLumin() {
 	} catch { return false; }
 }
 
+const _G_LIMIT = 60;
+
 async function _gTabLoadPage(tab, page) {
 	const grid = tab._gGrid;
 	const more = tab._gMore;
 	const status = tab._gStatus;
 	if (!grid) return;
-	if (status) status.textContent = "loading...";
-	try {
-		let result;
-		if (tab._gQuery) {
-			result = await Lumin.search(tab._gQuery);
-		} else {
-			result = await Lumin.getGames({ page });
-		}
-		const games = result?.games ?? [];
-		tab._gPage = page;
-		if (page === 0) grid.replaceChildren();
-		for (const g of games) grid.append(_gCard(g));
-		const hasMore = !tab._gQuery && games.length >= 24;
-		if (more) more.hidden = !hasMore;
-		if (status) status.textContent = games.length ? "" : "no games found";
-	} catch (err) {
-		if (status) status.textContent = "couldn't load games";
+	if (page === 1) {
+		tab._gGen = (tab._gGen || 0) + 1;
+		tab._gSeen = new Set();
+		tab._gDone = false;
+		tab._gBusy = false;
 	}
+	if (tab._gBusy || tab._gDone) return;
+	const gen = tab._gGen;
+	const query = tab._gQuery;
+	tab._gBusy = true;
+	if (more) more.hidden = true;
+	if (status && page === 1) status.textContent = "loading...";
+	try {
+		const opts = { page, limit: _G_LIMIT };
+		if (query) opts.q = query;
+		const result = await Lumin.getGames(opts);
+		if (gen !== tab._gGen) return;
+		const games = Array.isArray(result?.games) ? result.games : [];
+		if (page === 1) grid.replaceChildren();
+		let added = 0;
+		for (const g of games) {
+			if (!g || g.id == null || tab._gSeen.has(g.id)) continue;
+			tab._gSeen.add(g.id);
+			grid.append(_gCard(g, tab));
+			added++;
+		}
+		tab._gPage = page;
+		const pages = Number(result?.pages);
+		const total = Number(result?.total);
+		if (Number.isFinite(pages) && pages > 0) tab._gDone = page >= pages;
+		else if (Number.isFinite(total) && total > 0) tab._gDone = tab._gSeen.size >= total;
+		else tab._gDone = games.length === 0;
+		if (!added) tab._gDone = true;
+		if (!query && Number.isFinite(total) && total > 0 && tab._gSearch) tab._gSearch.placeholder = `search ${total.toLocaleString()} games...`;
+		if (status) status.textContent = tab._gSeen.size ? "" : "no games found";
+		tab._gBusy = false;
+		if (more) more.hidden = tab._gDone;
+		_gFill(tab);
+	} catch {
+		if (gen !== tab._gGen) return;
+		tab._gBusy = false;
+		if (page === 1) {
+			if (status) status.textContent = "couldn't load games";
+			if (more) { more.textContent = "try again"; more.hidden = false; }
+		} else if (more) {
+			more.textContent = "couldn't load more, try again";
+			more.hidden = false;
+		}
+		tab._gRetry = page;
+		return;
+	}
+	if (more) more.textContent = "load more";
+	tab._gRetry = 0;
+}
+
+function _gFill(tab) {
+	const grid = tab._gGrid;
+	if (!grid || tab._gDone || tab._gBusy || !tab.aiDiv?.classList.contains("active")) return;
+	if (grid.scrollTop + grid.clientHeight >= grid.scrollHeight - 800) _gTabLoadPage(tab, tab._gPage + 1);
 }
 
 function _createGamesDiv(tab) {
@@ -872,33 +973,68 @@ function _createGamesDiv(tab) {
 	tab._gGrid = grid;
 	tab._gMore = more;
 	tab._gStatus = status;
+	tab._gSearch = search;
 	tab._gPage = 0;
 	tab._gQuery = "";
+	tab._gImgs = typeof IntersectionObserver === "function"
+		? new IntersectionObserver((entries) => {
+			for (const e of entries) {
+				if (!e.isIntersecting) continue;
+				tab._gImgs.unobserve(e.target);
+				e.target._gLoadImg?.();
+			}
+		}, { root: grid, rootMargin: "400px 0px" })
+		: null;
 
 	let searchTimer;
 	search.addEventListener("input", () => {
 		clearTimeout(searchTimer);
-		searchTimer = setTimeout(async () => {
-			tab._gQuery = search.value.trim();
-			if (_luminReady) await _gTabLoadPage(tab, 0);
+		searchTimer = setTimeout(() => {
+			const q = search.value.trim();
+			if (q === tab._gQuery) return;
+			tab._gQuery = q;
+			grid.scrollTop = 0;
+			if (_luminReady) _gTabLoadPage(tab, 1);
 		}, 300);
 	});
-	more.addEventListener("click", () => _gTabLoadPage(tab, tab._gPage + 1));
+	grid.addEventListener("scroll", () => _gFill(tab), { passive: true });
+	more.addEventListener("click", () => {
+		if (!_luminReady) return _gStart(tab);
+		if (tab._gRetry) return _gTabLoadPage(tab, tab._gRetry);
+		_gTabLoadPage(tab, tab._gPage + 1);
+	});
+	new ResizeObserver(() => _gFill(tab)).observe(grid);
 
 	ui.frames.append(div);
 
-	_ensureLumin().then((ok) => { if (ok) _gTabLoadPage(tab, 0); else if (status) status.textContent = "games unavailable"; });
+	_gStart(tab);
 
 	return div;
 }
 
-function _gCard(game) {
+function _gStart(tab) {
+	const status = tab._gStatus;
+	const more = tab._gMore;
+	if (status) status.textContent = "loading...";
+	if (more) more.hidden = true;
+	_ensureLumin().then((ok) => {
+		if (ok) return _gTabLoadPage(tab, 1);
+		if (status) status.textContent = "games unavailable";
+		if (more) { more.textContent = "try again"; more.hidden = false; }
+	});
+}
+
+function _gCard(game, tab) {
 	const card = el("button", { class: "gcard", title: game.name, "data-gid": game.id });
 	const img = el("img", { class: "gcard-img", alt: game.name, loading: "lazy" });
 	img.src = "/img/logo.svg";
 	img.style.opacity = "0.25";
 	if (game.image_token && typeof Lumin !== "undefined") {
-		Lumin.getImageUrl(game.image_token).then((url) => { img.src = url; img.style.opacity = ""; }).catch(() => {});
+		card._gLoadImg = () => {
+			Lumin.getImageUrl(game.image_token).then((url) => { img.src = url; img.style.opacity = ""; }).catch(() => {});
+		};
+		if (tab?._gImgs) tab._gImgs.observe(card);
+		else card._gLoadImg();
 	}
 	const label = el("span", { class: "gcard-label" }, game.name);
 	card.append(img, label);
@@ -914,246 +1050,12 @@ function _gOpen(game) {
 	activate(tab);
 }
 
-const _aiModels = [
-	{ id: "claude-sonnet-5",                     label: "claude sonnet 5",           p: "anthropic" },
-	{ id: "claude-opus-5",                        label: "claude opus 5",             p: "anthropic" },
-	{ id: "claude-opus-4-8",                      label: "claude opus 4.8",           p: "anthropic" },
-	{ id: "claude-fable-5-1",                     label: "claude fable 5.1",          p: "anthropic" },
-	{ id: "gpt-5.6-luna",                         label: "gpt 5.6 luna",              p: "openai" },
-	{ id: "gpt-6-astra",                          label: "gpt 6 astra",               p: "openai" },
-	{ id: "gpt-5.6-sol",                          label: "gpt 5.6 sol",               p: "openai" },
-	{ id: "gpt-5.6-terra",                        label: "gpt 5.6 terra",             p: "openai" },
-	{ id: "gpt-5.5",                              label: "gpt 5.5",                   p: "openai" },
-	{ id: "gpt-5.4-mini",                         label: "gpt 5.4 mini",              p: "openai" },
-	{ id: "gpt-4.1",                              label: "gpt 4.1",                   p: "openai" },
-	{ id: "gpt-4o",                               label: "gpt 4o",                    p: "openai" },
-	{ id: "kimi-k3",                              label: "kimi k3",                   p: "moonshot" },
-	{ id: "kimi-k2.7-code",                       label: "kimi k2.7 code",            p: "moonshot" },
-	{ id: "grok-4.6",                             label: "grok 4.6",                  p: "xai" },
-	{ id: "deepseek-v4-pro",                      label: "deepseek v4 pro",           p: "deepseek" },
-	{ id: "deepseek-v4-flash",                    label: "deepseek v4 flash",         p: "deepseek" },
-	{ id: "deepseek-v3.2",                        label: "deepseek v3.2",             p: "deepseek" },
-	{ id: "glm-5.3",                              label: "glm 5.3",                   p: "zai" },
-	{ id: "gemini-2.5-flash-lite",                label: "gemini 2.5 flash",          p: "google" },
-	{ id: "gemma-4-26b",                          label: "gemma 4 26b",               p: "google" },
-	{ id: "qwen-3.8-max",                         label: "qwen 3.8 max",              p: "qwen" },
-	{ id: "qwen-3.7-plus",                        label: "qwen 3.7 plus",             p: "qwen" },
-	{ id: "command-a-plus",                       label: "command a+",                p: "cohere" },
-	{ id: "llama-3.3-70b-instruct",               label: "llama 3.3 70b",             p: "meta" },
-	{ id: "mistral-small-3.2-24b-instruct-2506",  label: "mistral small 3.2",         p: "mistral" },
-];
-
-function _mkAiDropdown(models, defaultId) {
-	const wrap = el("div", { class: "ai-dd" });
-	let current = models.find(m => m.id === defaultId) ?? models[0];
-
-	const trigger = el("button", { class: "ai-dd-trigger", type: "button" });
-	const dot = el("span", { class: "ai-dd-dot" });
-	const label = el("span", { class: "ai-dd-label" });
-	const chev = el("span", { class: "ai-dd-chev" });
-	chev.innerHTML = `<svg viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>`;
-	trigger.append(dot, label, chev);
-
-	const panel = el("div", { class: "ai-dd-panel" });
-
-	function pick(m) {
-		current = m;
-		label.textContent = m.label;
-		dot.dataset.p = m.p;
-		panel.querySelectorAll(".ai-dd-opt").forEach(o =>
-			o.classList.toggle("sel", o.dataset.id === m.id));
-	}
-
-	for (const m of models) {
-		const opt = el("button", { class: "ai-dd-opt", type: "button", "data-id": m.id });
-		const odot = el("span", { class: "ai-dd-dot", "data-p": m.p });
-		opt.append(odot, document.createTextNode(m.label));
-		opt.addEventListener("click", () => { pick(m); panel.classList.remove("open"); wrap.classList.remove("open"); });
-		panel.append(opt);
-	}
-
-	trigger.addEventListener("click", (e) => {
-		e.stopPropagation();
-		const open = panel.classList.toggle("open");
-		wrap.classList.toggle("open", open);
-	});
-	document.addEventListener("click", () => {
-		panel.classList.remove("open");
-		wrap.classList.remove("open");
-	}, { capture: true, passive: true });
-
-	pick(current);
-	wrap.append(trigger, panel);
-	Object.defineProperty(wrap, "value", { get: () => current.id });
-	return wrap;
-}
-
-function _aiMd(text) {
-	let h = text
-		.replace(/&/g, "&amp;")
-		.replace(/</g, "&lt;")
-		.replace(/>/g, "&gt;");
-	h = h.replace(/```(\w*)\n?([\s\S]*?)```/g, (_, lang, code) => {
-		const langTag = lang ? `<span class="ai-code-lang">${lang}</span>` : "";
-		return `<div class="ai-code-wrap">${langTag}<button class="ai-copy-btn" type="button">copy</button><pre><code>${code.trim()}</code></pre></div>`;
-	});
-	h = h.replace(/`([^`\n]+)`/g, (_, c) => `<code>${c}</code>`);
-	h = h.replace(/\*\*(.+?)\*\*/g, (_, t) => `<strong>${t}</strong>`);
-	h = h.replace(/\*(.+?)\*/g, (_, t) => `<em>${t}</em>`);
-	h = h.replace(/^### (.+)$/gm, (_, t) => `<h4>${t}</h4>`);
-	h = h.replace(/^## (.+)$/gm, (_, t) => `<h3>${t}</h3>`);
-	h = h.replace(/^# (.+)$/gm, (_, t) => `<h3>${t}</h3>`);
-	h = h.replace(/^> (.+)$/gm, (_, t) => `<blockquote>${t}</blockquote>`);
-	h = h.replace(/^---$/gm, () => `<hr>`);
-	h = h.replace(/((?:^- .+\n?)+)/gm, (block) => {
-		const items = block.trim().replace(/^- (.+)$/gm, (_, t) => `<li>${t}</li>`);
-		return `<ul>${items}</ul>`;
-	});
-	h = h.replace(/:::(\w*)[^\n]*\n([\s\S]*?):::/g, (_, _type, content) =>
-		`<div class="ai-box">${content.trim()}</div>`);
-	h = h.replace(/\n\n+/g, "</p><p>");
-	h = `<p>${h}</p>`;
-	h = h.replace(/<p>([\s\S]*?)<\/p>/g, (_, inner) => {
-		if (/^<(?:pre|div|h[34]|ul|blockquote|hr)/.test(inner.trim())) return inner;
-		return `<p>${inner}</p>`;
-	});
-	h = h.replace(/(?<!<\/pre>)\n/g, "<br>");
-	return h;
-}
-
 function _createAiDiv(tab) {
 	const div = el("div", { class: "tab-frame ai-frame" });
-
-	const header = el("div", { class: "ai-header" });
-	const sel = _mkAiDropdown(_aiModels, "claude-sonnet-5");
-
-	const wsLabel = el("label", { class: "ai-ws-label" });
-	const wsCheck = el("input", { type: "checkbox" });
-	const wsSlider = el("span", { class: "ai-ws-slider" });
-	const wsText = el("span", { class: "ai-ws-text" }, "web");
-	wsLabel.append(wsCheck, wsSlider, wsText);
-
-	const clearBtn = el("button", { class: "ai-clear-btn", type: "button" });
-	clearBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6"/></svg>`;
-	clearBtn.title = "clear chat";
-	clearBtn.addEventListener("click", () => {
-		tab.messages = [];
-		msgs.replaceChildren();
-	});
-	header.append(sel, wsLabel, clearBtn);
-
-	const msgs = el("div", { class: "ai-messages" });
-	msgs.addEventListener("click", (e) => {
-		const btn = e.target.closest(".ai-copy-btn");
-		if (!btn) return;
-		const code = btn.closest(".ai-code-wrap")?.querySelector("code")?.textContent ?? "";
-		navigator.clipboard.writeText(code).then(() => {
-			btn.textContent = "copied!";
-			setTimeout(() => (btn.textContent = "copy"), 1800);
-		}).catch(() => {});
-	});
-
-	const inputArea = el("div", { class: "ai-input-area" });
-	const textarea = el("textarea", { class: "ai-input", placeholder: "message...", rows: "1", spellcheck: "false" });
-	const autoResize = () => {
-		textarea.style.height = "auto";
-		textarea.style.height = Math.min(textarea.scrollHeight, 140) + "px";
-	};
-	textarea.addEventListener("input", autoResize);
-	textarea.addEventListener("keydown", (e) => {
-		if (e.key === "Enter" && !e.shiftKey) {
-			e.preventDefault();
-			const text = textarea.value.trim();
-			if (text) { textarea.value = ""; autoResize(); _aiSend(tab, text, msgs, sel, wsCheck); }
-		}
-	});
-	const sendBtn = el("button", { class: "ai-send", type: "button" });
-	sendBtn.innerHTML = `<svg viewBox="0 0 24 24"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>`;
-	sendBtn.addEventListener("click", () => {
-		const text = textarea.value.trim();
-		if (text) { textarea.value = ""; autoResize(); _aiSend(tab, text, msgs, sel, wsCheck); }
-	});
-	inputArea.append(textarea, sendBtn);
-
-	div.append(header, msgs, inputArea);
+	mountAiChat(div);
 	tab.aiDiv = div;
 	ui.frames.append(div);
 	return div;
-}
-
-async function _aiSend(tab, text, msgs, sel, wsCheck) {
-	tab.messages.push({ role: "user", content: text });
-	const userDiv = el("div", { class: "ai-msg user" });
-	userDiv.innerHTML = _aiMd(text);
-	msgs.append(userDiv);
-	msgs.scrollTop = msgs.scrollHeight;
-
-	let searchCtx = "";
-	if (wsCheck?.checked) {
-		try {
-			const sr = await fetch(`/api/ai/search?q=${encodeURIComponent(text)}`);
-			const { results } = await sr.json();
-			if (results?.length) {
-				searchCtx = "\n\nWeb search results:\n" + results.map((r) =>
-					`[${r.title}](${r.url}): ${r.snippet}`).join("\n");
-			}
-		} catch {}
-	}
-
-	const thinkRow = el("div", { class: "ai-think-row" });
-	thinkRow.innerHTML = `<span class="ai-thinking">thinking...</span>`;
-	msgs.append(thinkRow);
-	msgs.scrollTop = msgs.scrollHeight;
-
-	const model = sel?.value || "claude-sonnet-5";
-	const history = tab.messages.slice(-20).map((m, i) =>
-		(m.role === "user" && i === tab.messages.length - 1 && searchCtx)
-			? { role: m.role, content: m.content + searchCtx }
-			: { role: m.role, content: m.content }
-	);
-
-	let aiDiv = null;
-	try {
-		const res = await fetch("/api/ai/chat", {
-			method: "POST",
-			headers: { "Content-Type": "application/json" },
-			body: JSON.stringify({ model, messages: history, stream: true, max_tokens: 4096 }),
-		});
-		if (!res.ok) throw new Error(`HTTP ${res.status}`);
-		let full = "";
-		const reader = res.body.getReader();
-		const dec = new TextDecoder();
-		while (true) {
-			const { done, value } = await reader.read();
-			if (done) break;
-			const chunk = dec.decode(value, { stream: true });
-			for (const line of chunk.split("\n")) {
-				if (!line.startsWith("data: ")) continue;
-				const data = line.slice(6).trim();
-				if (data === "[DONE]") { reader.cancel(); break; }
-				try {
-					const delta = JSON.parse(data).choices?.[0]?.delta?.content;
-					if (delta) {
-						full += delta;
-						if (!aiDiv) {
-							thinkRow.remove();
-							aiDiv = el("div", { class: "ai-msg ai" });
-							msgs.append(aiDiv);
-						}
-						aiDiv.innerHTML = _aiMd(full);
-						msgs.scrollTop = msgs.scrollHeight;
-					}
-				} catch {}
-			}
-		}
-		if (!aiDiv) thinkRow.remove();
-		tab.messages.push({ role: "assistant", content: full });
-	} catch (err) {
-		thinkRow.remove();
-		const errDiv = el("div", { class: "ai-msg ai" });
-		errDiv.innerHTML = `<span class="ai-err">error: ${err.message}</span>`;
-		msgs.append(errDiv);
-	}
 }
 
 function openGameFullscreen(src, title) {
@@ -1218,6 +1120,29 @@ function renderSettings() {
 		for (const [id, eng] of Object.entries(SEARCH_ENGINES)) search.append(new Option(eng.name, id));
 	}
 	search.value = s.searchEngine;
+	$("adblock-off-list").replaceChildren(
+		...(s.adblockOff.length
+			? s.adblockOff.map((host) =>
+					el(
+						"li",
+						{ class: "chip" },
+						host,
+						el(
+							"button",
+							{
+								class: "chip-x",
+								"aria-label": `remove ${host}`,
+								onclick: () => {
+									engine?.setAdblock(host, true);
+									renderSettings();
+								},
+							},
+							"✕"
+						)
+					)
+				)
+			: [el("li", { class: "muted" }, "none")])
+	);
 	$("compat-list").replaceChildren(
 		...(s.compatSites.length
 			? s.compatSites.map((origin) =>
