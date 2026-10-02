@@ -38,7 +38,7 @@ nocturne-engine/
     css/umbrella.css        plain light/dark theme, sidebar becomes a drawer under 640px
     js/engine.js            scramjet controller wiring, transports, plugins, compat flags
     js/app.js               ui logic
-    js/store.js             settings, bookmarks, history, open tabs, site icons (localStorage)
+    js/store.js             settings, bookmarks, history, site icons (localStorage), open tabs (sessionStorage)
     js/omnibox.js           url vs search detection
     js/error-page.js        error classification + branded error pages
     js/plugins/             umbrella frame plugins + blocklist
@@ -196,7 +196,7 @@ umbrella's own, in `public/js/plugins/umbrella-plugins.js`:
 
 - zen style vertical tabs in a left sidebar. every tab keeps its own live frame, so switching tabs never reloads a page and audio keeps playing in the background. tabs can be dragged to reorder, middle clicked to close, and the sidebar can be hidden (hover the left edge to peek at it).
 - bookmarks sit above the tabs as a grid of site icons. clicking one switches to its open tab or opens it.
-- open tabs are saved in localStorage, so a reload or a new visit brings them back. only the active tab loads right away, the rest load when you click them.
+- open tabs live for the browser session: a reload brings them back, but closing the site or leaving and coming back starts fresh. bookmarks stay saved. only the active tab loads right away, the rest load when you click them.
 - site icons are fetched once through the proxy, shrunk to 32px and cached per host.
 - omnibox that takes a url, a bare host (`discord.com`) or a search. the search engine is picked in settings.
 - back, forward, reload, loading bar, open current page in a real browser tab, bookmark star.

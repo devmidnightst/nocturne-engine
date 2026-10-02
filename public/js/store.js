@@ -118,12 +118,24 @@ export const history = {
 	},
 };
 
+try {
+	localStorage.removeItem(PREFIX + "tabs");
+} catch {}
+
 export const session = {
 	load() {
-		return read("tabs", null);
+		try {
+			const raw = sessionStorage.getItem(PREFIX + "tabs");
+			return raw == null ? null : JSON.parse(raw);
+		} catch {
+			return null;
+		}
 	},
 	save(data) {
-		write("tabs", data);
+		try {
+			sessionStorage.setItem(PREFIX + "tabs", JSON.stringify(data));
+		} catch {
+		}
 	},
 };
 

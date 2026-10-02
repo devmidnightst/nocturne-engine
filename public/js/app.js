@@ -164,7 +164,7 @@ function writeSession() {
 	clearTimeout(saveTimer);
 	saveTimer = null;
 	session.save({
-		tabs: tabs.map(({ id, url, title }) => ({ id, url, title })),
+		tabs: tabs.map(({ id, url, title, type, gameId }) => ({ id, url, title, type, gameId })),
 		active: active?.id ?? null,
 	});
 }
@@ -173,11 +173,33 @@ function saveSession() {
 	saveTimer ??= setTimeout(writeSession, 100);
 }
 
+function reloadedPage() {
+	try {
+		return performance.getEntriesByType("navigation")[0]?.type === "reload";
+	} catch {
+		return false;
+	}
+}
+
+function restoreTab(t) {
+	if (!t || typeof t.id !== "string") return null;
+	if (t.type === "ai") return { ...makeAiTab(), id: t.id };
+	if (t.type === "games") return { ...makeGamesTab(), id: t.id };
+	if (t.type === "game") {
+		if (t.gameId == null) return null;
+		const tab = makeTab({ id: t.id, title: t.title || "game", type: "game" });
+		tab.gameId = t.gameId;
+		return tab;
+	}
+	return typeof t.url === "string" ? makeTab({ id: t.id, url: t.url, title: t.title || "" }) : null;
+}
+
 function restoreSession() {
-	const saved = session.load();
+	const saved = reloadedPage() ? session.load() : null;
 	if (saved && Array.isArray(saved.tabs)) {
 		for (const t of saved.tabs) {
-			if (t && typeof t.url === "string") tabs.push(makeTab(t));
+			const tab = restoreTab(t);
+			if (tab) tabs.push(tab);
 		}
 	}
 	if (!tabs.length) {
@@ -203,43 +225,97 @@ function scheduleRender() {
 	});
 }
 
+function tabIconKey(tab) {
+	if (tab.loading) return "spin";
+	if (tab.type === "ai" || tab.type === "games") return tab.type;
+	if (tab.type === "game") return `game:${tab.gameImg || ""}`;
+	if (!tab.url) return "blank";
+	const host = hostOf(tab.url);
+	return `fav:${host}:${icons.get(host)?.data ? 1 : 0}`;
+}
+
+function tabIcon(tab) {
+	if (tab.loading) return el("span", { class: "fav spinner" });
+	if (tab.type === "ai") return el("span", { class: "fav ai-fav" }, "✦");
+	if (tab.type === "games") return el("span", { class: "fav games-fav" }, "▦");
+	if (tab.type === "game") return tab.gameImg ? el("span", { class: "fav img" }, el("img", { src: tab.gameImg, alt: "" })) : el("span", { class: "fav" }, "▶");
+	if (tab.url) return favicon(tab.url);
+	return el("span", { class: "fav img blank" }, el("img", { src: "/img/logo.svg", alt: "" }));
+}
+
+const tabRows = new Map();
+
+function tabRow(tab) {
+	let row = tabRows.get(tab.id);
+	if (!row) {
+		row = el(
+			"li",
+			{ class: "tab-row", role: "tab", draggable: "true", "data-id": tab.id },
+			el("span", { class: "fav" }),
+			el("span", { class: "tab-title" }),
+			el("button", { class: "tab-close", "data-close": tab.id }, icon("M6 6l12 12M18 6L6 18"))
+		);
+		tabRows.set(tab.id, row);
+	}
+	const isActive = tab === active;
+	const label = tabLabel(tab);
+	const tip = tab.url || "new tab";
+	row.classList.toggle("active", isActive);
+	row.classList.toggle("loading", !!tab.loading);
+	row.setAttribute("aria-selected", String(isActive));
+	if (row.title !== tip) row.title = tip;
+	const key = tabIconKey(tab);
+	if (row.dataset.icon !== key) {
+		row.dataset.icon = key;
+		row.firstElementChild.replaceWith(tabIcon(tab));
+	}
+	const title = row.querySelector(".tab-title");
+	if (title.textContent !== label) title.textContent = label;
+	const close = row.querySelector(".tab-close");
+	if (close.getAttribute("aria-label") !== `close ${label}`) close.setAttribute("aria-label", `close ${label}`);
+	return row;
+}
+
 function renderTabs() {
-	ui.tabList.replaceChildren(
-		...tabs.map((tab) =>
-			el(
-				"li",
-				{
-					class: `tab-row${tab === active ? " active" : ""}${tab.loading ? " loading" : ""}`,
-					role: "tab",
-					"aria-selected": String(tab === active),
-					draggable: "true",
-					title: tab.url || "new tab",
-					"data-id": tab.id,
-				},
-				tab.loading ? el("span", { class: "fav spinner" })
-					: tab.type === "ai" ? el("span", { class: "fav ai-fav" }, "✦")
-					: tab.type === "games" ? el("span", { class: "fav games-fav" }, "▦")
-					: tab.type === "game" ? (tab.gameImg ? el("span", { class: "fav img" }, el("img", { src: tab.gameImg, alt: "" })) : el("span", { class: "fav" }, "▶"))
-					: tab.url ? favicon(tab.url) : el("span", { class: "fav img blank" }, el("img", { src: "/img/logo.svg", alt: "" })),
-				el("span", { class: "tab-title" }, tabLabel(tab)),
-				el("button", { class: "tab-close", "aria-label": `close ${tabLabel(tab)}`, "data-close": tab.id }, icon("M6 6l12 12M18 6L6 18"))
-			)
-		)
-	);
+	const ids = new Set(tabs.map((t) => t.id));
+	for (const [id, row] of tabRows) {
+		if (!ids.has(id)) {
+			row.remove();
+			tabRows.delete(id);
+		}
+	}
+	let cursor = ui.tabList.firstElementChild;
+	for (const tab of tabs) {
+		const row = tabRow(tab);
+		if (row === cursor) cursor = cursor.nextElementSibling;
+		else ui.tabList.insertBefore(row, cursor);
+	}
+	while (cursor) {
+		const extra = cursor;
+		cursor = cursor.nextElementSibling;
+		extra.remove();
+	}
 	ui.tabCount.textContent = tabs.length === 1 ? "1 tab" : `${tabs.length} tabs`;
 	$("open-sidebar").setAttribute("aria-label", `show tabs (${tabs.length})`);
 	$("mobile-count").textContent = String(Math.min(tabs.length, 99));
 }
 
+let essentialsKey = null;
 function renderEssentials() {
-	const list = bookmarks.all();
+	const list = bookmarks.all().slice(0, 24);
+	const openUrls = new Set(tabs.map((t) => t.url));
+	const key = JSON.stringify([
+		active?.url ?? null,
+		list.map((b) => [b.url, b.title, openUrls.has(b.url), !!icons.get(hostOf(b.url))?.data]),
+	]);
+	if (key === essentialsKey) return;
+	essentialsKey = key;
 	if (!list.length) {
 		ui.essentials.replaceChildren(el("p", { class: "side-hint" }, "star a page to pin it here"));
 		return;
 	}
-	const openUrls = new Set(tabs.map((t) => t.url));
 	ui.essentials.replaceChildren(
-		...list.slice(0, 24).map((b) =>
+		...list.map((b) =>
 			el(
 				"button",
 				{
@@ -397,13 +473,18 @@ function openTab(url, { opener = null, background = false } = {}) {
 
 function closeTab(tab) {
 	const i = tabs.indexOf(tab);
-	if (i === -1) return;
-	const row = ui.tabList.querySelector(`[data-id="${tab.id}"]`);
+	if (i === -1 || tab.closing) return;
+	tab.closing = true;
+	const row = tabRows.get(tab.id);
+	let done = false;
 	const finish = () => {
+		if (done) return;
+		done = true;
 		tab.aiDiv?.remove();
 		tab.handle?.destroy();
 		tab.iframe?.remove();
-		tabs.splice(tabs.indexOf(tab), 1);
+		const at = tabs.indexOf(tab);
+		if (at !== -1) tabs.splice(at, 1);
 		if (!tabs.length) tabs.push(makeTab());
 		if (tab === active) {
 			active = null;
@@ -413,9 +494,10 @@ function closeTab(tab) {
 			saveSession();
 		}
 	};
-	if (row) {
+	if (row?.isConnected) {
 		row.classList.add("closing");
-		row.addEventListener("animationend", finish, { once: true });
+		row.addEventListener("animationend", (e) => e.target === row && finish());
+		setTimeout(finish, 300);
 	} else {
 		finish();
 	}
@@ -595,7 +677,7 @@ ui.tabList.addEventListener("dragover", (e) => {
 	if (!dragId) return;
 	e.preventDefault();
 	const row = e.target.closest(".tab-row");
-	for (const r of ui.tabList.children) r.classList.remove("drop-before", "drop-after");
+	clearDropMarks();
 	if (!row || row.dataset.id === dragId) return;
 	const box = row.getBoundingClientRect();
 	row.classList.add(e.clientY < box.top + box.height / 2 ? "drop-before" : "drop-after");
@@ -614,12 +696,18 @@ ui.tabList.addEventListener("drop", (e) => {
 		saveSession();
 	}
 	dragId = null;
+	clearDropMarks();
 	scheduleRender();
 });
 ui.tabList.addEventListener("dragend", () => {
 	dragId = null;
+	clearDropMarks();
 	scheduleRender();
 });
+
+function clearDropMarks() {
+	for (const r of ui.tabList.children) r.classList.remove("drop-before", "drop-after");
+}
 
 function applySidebarState() {
 	document.body.classList.toggle("collapsed", !!settings.get().sidebarCollapsed);
