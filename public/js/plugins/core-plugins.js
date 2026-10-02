@@ -1,20 +1,20 @@
 import { isBlocked } from "./blocklist.js";
 import {
-	renderErrorPage,
-	renderBlockedPage,
-	classifyError,
-	needsDiagnosis,
-	diagnoseKind,
+	_rE,
+	_rB,
+	_cE,
+	_nD,
+	_dK,
 } from "../error-page.js";
 
 const { ManagedPlugin } = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
-const { ScramjetHeaders } = globalThis[atob("JHNjcmFtamV0")];
+const { _SH } = globalThis[atob("JHNjcmFtamV0")];
 
 const isNavigation = (dest) => dest === "document" || dest === "iframe" || dest === "frame";
 
-export class ErrorPagePlugin extends ManagedPlugin {
+export class _EP extends ManagedPlugin {
 	constructor(onError) {
-		super("umbrella-error-pages", []);
+		super("_ep3", []);
 		this.onError = onError;
 	}
 
@@ -29,12 +29,12 @@ export class ErrorPagePlugin extends ManagedPlugin {
 				);
 			} catch {
 			}
-			let kind = classifyError(ctx.error);
+			let kind = _cE(ctx.error);
 			const navigation = isNavigation(req.destination);
-			if (navigation && needsDiagnosis(ctx.error, kind)) kind = (await diagnoseKind(target)) ?? kind;
+			if (navigation && _nD(ctx.error, kind)) kind = (await _dK(target)) ?? kind;
 			this.onError?.({ url: target, kind, error: ctx.error, destination: req.destination });
 			if (!navigation) return;
-			props.setResponse = renderErrorPage({ url: target, error: ctx.error, kind });
+			props.setResponse = _rE({ url: target, error: ctx.error, kind });
 		});
 	}
 }
@@ -46,9 +46,9 @@ const EMPTY_TYPES = {
 	font: "font/woff2",
 };
 
-export class ContentBlockerPlugin extends ManagedPlugin {
+export class _CB extends ManagedPlugin {
 	constructor(isEnabled) {
-		super("umbrella-content-blocker", []);
+		super("_cb4", []);
 		this.isEnabled = isEnabled;
 		this.blocked = 0;
 	}
@@ -62,15 +62,15 @@ export class ContentBlockerPlugin extends ManagedPlugin {
 
 			this.blocked++;
 			if (isNavigation(destination)) {
-				const page = renderBlockedPage(url.href);
-				props.response = { ...page, headers: ScramjetHeaders.fromRawHeaders(page.headers) };
+				const page = _rB(url.href);
+				props.response = { ...page, headers: _SH.fromRawHeaders(page.headers) };
 				return;
 			}
 			props.response = {
 				body: "",
 				status: 200,
 				statusText: "OK",
-				headers: ScramjetHeaders.fromRawHeaders([
+				headers: _SH.fromRawHeaders([
 					["content-type", EMPTY_TYPES[destination] ?? "text/plain"],
 					["cache-control", "no-store"],
 				]),
@@ -79,9 +79,9 @@ export class ContentBlockerPlugin extends ManagedPlugin {
 	}
 }
 
-export class RecoveryPlugin extends ManagedPlugin {
+export class _RP extends ManagedPlugin {
 	constructor(report) {
-		super("umbrella-recovery", []);
+		super("_rc5", []);
 		this.report = report;
 	}
 
@@ -193,9 +193,9 @@ function linkTarget(e) {
 	return null;
 }
 
-export class ShellBridgePlugin extends ManagedPlugin {
+export class _SB extends ManagedPlugin {
 	constructor(events) {
-		super("umbrella-shell-bridge", []);
+		super("_sb6", []);
 		this.events = events;
 	}
 

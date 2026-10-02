@@ -1,12 +1,13 @@
-import { settings, serverUrl } from "./store.js";
+import { settings, _dsu } from "./store.js";
+import { _nr, _nrx } from "./net-resolver.js";
 import {
-	ErrorPagePlugin,
-	ContentBlockerPlugin,
-	RecoveryPlugin,
-	ShellBridgePlugin,
-} from "./plugins/umbrella-plugins.js";
-import { CaptchaPlugin } from "./plugins/captcha-plugin.js";
-import { CloakPlugin } from "./plugins/cloak-plugin.js";
+	_EP,
+	_CB,
+	_RP,
+	_SB,
+} from "./plugins/core-plugins.js";
+import { _CP } from "./plugins/captcha-plugin.js";
+import { _CK } from "./plugins/cloak-plugin.js";
 
 const _nc_ctrl = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
 const _nc_core = globalThis[atob("JHNjcmFtamV0")];
@@ -48,30 +49,30 @@ function buildEngineConfig() {
 	};
 }
 
-async function createLibcurl(url) {
-	const { LibcurlClient } = await import("/assets/r/transport.mjs");
-	const transport = new LibcurlClient({ wisp: url, connections: [80, 40, 16] });
-	await transport.init();
-	return transport;
+async function _cL(url) {
+	const _m = await import("/assets/r/transport.mjs");
+	const _t = new _m[atob("TGliY3VybENsaWVudA==")]({ wisp: url, connections: [80, 40, 16] });
+	await _t.init();
+	return _t;
 }
 
-function epoxyWithLibcurlSockets(epoxy, url) {
-	let libcurl = null;
-	const getLibcurl = () => (libcurl ??= createLibcurl(url).catch((err) => ((libcurl = null), Promise.reject(err))));
-	(self.requestIdleCallback ?? setTimeout)(() => getLibcurl().catch(() => {}), { timeout: 5000 });
+function _eLs(_ep, url) {
+	let _lc = null;
+	const _gL = () => (_lc ??= _cL(url).catch((err) => ((_lc = null), Promise.reject(err))));
+	(self.requestIdleCallback ?? setTimeout)(() => _gL().catch(() => {}), { timeout: 5000 });
 
 	return {
 		get ready() {
-			return epoxy.ready;
+			return _ep.ready;
 		},
-		init: () => epoxy.init(),
-		meta: () => epoxy.meta?.(),
-		request: (...args) => epoxy.request(...args),
+		init: () => _ep.init(),
+		meta: () => _ep.meta?.(),
+		request: (...args) => _ep.request(...args),
 		connect(wsUrl, protocols, headers, onopen, onmessage, onclose, onerror) {
 			let inner = null;
 			let closed = null;
 			const pending = [];
-			getLibcurl().then(
+			_gL().then(
 				(t) => {
 					if (closed) return onclose(closed[0] ?? 1000, closed[1] ?? "");
 					inner = t.connect(wsUrl, protocols, headers, onopen, onmessage, onclose, onerror);
@@ -90,7 +91,7 @@ function epoxyWithLibcurlSockets(epoxy, url) {
 	};
 }
 
-function frameTransport(getBase) {
+function _fT(getBase) {
 	const inflight = new Set();
 	return {
 		get ready() {
@@ -134,19 +135,34 @@ function frameTransport(getBase) {
 	};
 }
 
-async function createTransport(kind = settings.get().transport) {
-	const url = serverUrl();
-	let transport;
-	if (kind === "libcurl") {
-		transport = await createLibcurl(url);
-	} else {
-		const { default: EpoxyTransport } = await import("/assets/r/transport.epoxy.mjs");
-		const epoxy = new EpoxyTransport({ wisp: url });
-		await epoxy.init();
-		transport = epoxyWithLibcurlSockets(epoxy, url);
+async function _cT(kind = settings.get()._m) {
+	const pinned = !!(settings.get()._srvUrl || "").trim();
+	const own = _dsu();
+	for (let attempt = 0; attempt < 3; attempt++) {
+		const url = await _nr();
+		try {
+			return await _cTf(kind, url);
+		} catch (err) {
+			if (pinned || url === own) throw err;
+			_nrx(url);
+		}
 	}
-	transport.umbrellaKind = kind;
-	return transport;
+	return _cTf(kind, own);
+}
+
+async function _cTf(kind, url) {
+	let _t;
+	if (kind === "lc") {
+		_t = await _cL(url);
+	} else {
+		const { default: _ET } = await import("/assets/r/transport.alt.mjs");
+		const _ep = new _ET({ wisp: url });
+		await _ep.init();
+		_t = _eLs(_ep, url);
+	}
+	_t._tK = kind;
+	_t._tS = url;
+	return _t;
 }
 
 const ICON_SIZE = 32;
@@ -182,7 +198,7 @@ function headerValue(headers, name) {
 	return Array.isArray(hit[1]) ? hit[1][0] : hit[1];
 }
 
-async function fetchIconWith(transport, url) {
+async function _fIw(_t, url) {
 	if (url.startsWith("data:image/")) {
 		return iconDataUrl(await (await fetch(url)).blob());
 	}
@@ -203,7 +219,7 @@ async function fetchIconWith(transport, url) {
 		let target = new URL(url);
 		for (let hop = 0; hop < 4; hop++) {
 			if (!/^https?:$/.test(target.protocol)) return null;
-			const res = await Promise.race([transport.request(target, "GET", null, headers, ac.signal), timeout]);
+			const res = await Promise.race([_t.request(target, "GET", null, headers, ac.signal), timeout]);
 			const location = res.status >= 300 && res.status < 400 ? headerValue(res.headers, "location") : null;
 			if (location) {
 				await res.body?.cancel?.().catch(() => {});
@@ -267,12 +283,12 @@ export async function createEngine(events = {}, onStatus) {
 	const { sw, reg } = await registerServiceWorker(onStatus);
 
 	onStatus?.("starting up");
-	let transport = await createTransport();
+	let _t = await _cT();
 
 	onStatus?.("starting up");
 	const controller = new Controller({
 		serviceworker: sw,
-		transport,
+		transport: _t,
 		config: CONTROLLER_CONFIG,
 		[_kSCfg]: buildEngineConfig(),
 	});
@@ -287,22 +303,22 @@ export async function createEngine(events = {}, onStatus) {
 	const tabs = new Set();
 
 	function createTab(iframe, tabEvents = {}) {
-		const blocker = new ContentBlockerPlugin(() => settings.get().blockAds);
+		const blocker = new _CB(() => settings.get().blockAds);
 		const cache = new HttpCachePlugin();
-		const perFrame = frameTransport(() => transport);
+		const perFrame = _fT(() => _t);
 		const plugins = [
-			new CloakPlugin(),
+			new _CK(),
 			cache,
 			new UrlWatcherPlugin((url) => tabEvents.onUrl?.(url)),
 			new CatchEscapedLinksPlugin((url) => new URL(`/?go=${encodeURIComponent(url.href)}`, location.origin)),
 			blocker,
-			new CaptchaPlugin(),
-			new ErrorPagePlugin((info) => tabEvents.onError?.(info)),
-			new RecoveryPlugin((info) => {
+			new _CP(),
+			new _EP((info) => tabEvents.onError?.(info)),
+			new _RP((info) => {
 				if (info.type === "page-health") tabEvents.onHealth?.(info);
 				else if (info.type === "rewrite-error") events.onRewriteError?.(info);
 			}),
-			new ShellBridgePlugin({
+			new _SB({
 				onNavigateStart: () => tabEvents.onLoading?.(true),
 				onUnloading: () => {
 					perFrame.abortInFlight();
@@ -372,20 +388,20 @@ export async function createEngine(events = {}, onStatus) {
 	return {
 		controller,
 		createTab,
-		get transportKind() {
-			return transport.umbrellaKind;
+		get _tK() {
+			return _t._tK;
 		},
 		get blocked() {
 			let n = 0;
 			for (const t of tabs) n += t.blocker.blocked;
 			return n;
 		},
-		async setTransport(kind) {
-			const next = await createTransport(kind);
-			controller.setTransport(next);
-			transport = next;
+		async _sT(kind) {
+			const next = await _cT(kind);
+			controller._sT(next);
+			_t = next;
 			for (const t of tabs) t.frame.fetchHandler.client.transport = t.perFrame;
-			settings.set({ transport: kind });
+			settings.set({ _t: kind });
 			return kind;
 		},
 		setCompat(origin, on) {
@@ -399,7 +415,7 @@ export async function createEngine(events = {}, onStatus) {
 		diag() {
 			return self.__nc_d7f2;
 		},
-		fetchIcon: (url) => fetchIconWith(transport, url),
+		fetchIcon: (url) => _fIw(_t, url),
 		async clearData() {
 			for (const t of tabs) await t.cache.bust();
 			if (!tabs.size) await new HttpCachePlugin().bust();

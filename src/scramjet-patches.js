@@ -279,7 +279,7 @@ export function buildPatchedControllerInject(source) {
 	const applied = [];
 	const skipped = [];
 	let code = applyPatches(source, CONTROLLER_INJECT_PATCHES, applied, skipped);
-	code = `/* patched by umbrella: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
+	code = `/* p8q2: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
 	return { code, applied, skipped };
 }
 
@@ -320,7 +320,7 @@ export function buildPatchedUtils(source) {
 	const applied = [];
 	const skipped = [];
 	let code = applyPatches(source, UTILS_PATCHES, applied, skipped);
-	code = `/* patched by umbrella: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
+	code = `/* p8q2: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
 	return { code, applied, skipped };
 }
 
@@ -355,7 +355,7 @@ export function buildPatchedScramjet(source) {
 
 	code = stripSourceMap(code);
 	code =
-		`/* patched by umbrella: ${applied.join(", ") || "none"} */\n` +
+		`/* p8q2: ${applied.join(", ") || "none"} */\n` +
 		(needsPrelude ? PRELUDE : "") +
 		code +
 		(applied.includes("keyword-glue") ? EPILOGUE : "") +
