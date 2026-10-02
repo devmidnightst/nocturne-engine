@@ -34,17 +34,18 @@ const MAX_TEXT_FILE = 200 * 1024;
 const MAX_IMAGE_EDGE = 1280;
 
 const ICONS = {
-	newChat: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><path d="M12 7v6"/><path d="M9 10h6"/>',
+	umbrella: '<path d="M12 13v7a2 2 0 0 0 4 0"/><path d="M12 2v2"/><path d="M20.992 13a1 1 0 0 0 .97-1.274 10.284 10.284 0 0 0-19.923 0A1 1 0 0 0 3 13z"/>',
+	newChat: '<path d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.375 2.625a1 1 0 0 1 3 3l-9.013 9.014a2 2 0 0 1-.853.505l-2.873.84a.5.5 0 0 1-.62-.62l.84-2.873a2 2 0 0 1 .506-.852z"/>',
+	history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
 	search: '<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>',
 	settings: '<path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/><circle cx="12" cy="12" r="3"/>',
-	plus: '<path d="M5 12h14"/><path d="M12 5v14"/>',
+	clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
 	globe: '<circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/>',
 	up: '<path d="m5 12 7-7 7 7"/><path d="M12 19V5"/>',
 	stop: '<rect x="7" y="7" width="10" height="10" rx="1.5" fill="currentColor" stroke="none"/>',
 	chevron: '<path d="m6 9 6 6 6-6"/>',
 	x: '<path d="M18 6 6 18"/><path d="m6 6 12 12"/>',
 	trash: '<path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
-	panel: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M9 3v18"/>',
 	file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
 	check: '<path d="M20 6 9 17l-5-5"/>',
 };
@@ -142,9 +143,10 @@ function loadState() {
 			model: MODELS.some((m) => m.id === s.model) ? s.model : DEFAULT_MODEL,
 			web: !!s.web,
 			system: typeof s.system === "string" ? s.system : "",
+			history: s.history !== false,
 		};
 	} catch {
-		return { chats: [], model: DEFAULT_MODEL, web: false, system: "" };
+		return { chats: [], model: DEFAULT_MODEL, web: false, system: "", history: true };
 	}
 }
 
@@ -194,6 +196,13 @@ function timeGroup(ts) {
 	return "Older";
 }
 
+const SUGGESTIONS = [
+	{ label: "Explain something simply", prompt: "Explain this to me like I'm new to it: " },
+	{ label: "Help me write", prompt: "Help me write a short, friendly message about " },
+	{ label: "Fix my code", prompt: "Find the bug in this code and explain the fix:\n\n" },
+	{ label: "Summarize a page", prompt: "Summarize the main points of " },
+];
+
 export function mountAiChat(root) {
 	const state = loadState();
 	let current = null;
@@ -207,63 +216,74 @@ export function mountAiChat(root) {
 		} catch {}
 	};
 
-	const newBtn = h("button", { class: "aic-nav aic-nav-new", type: "button", html: `${svg("newChat")}<span>New chat</span>` });
-	const searchBtn = h("button", { class: "aic-nav", type: "button", html: `${svg("search")}<span>Search chats</span><kbd>${isMac ? "⌘K" : "Ctrl K"}</kbd>` });
-	const recentLabel = h("div", { class: "aic-label" }, "Recent");
-	const list = h("nav", { class: "aic-list" });
-	const settingsBtn = h("button", { class: "aic-nav", type: "button", html: `${svg("settings")}<span>Settings</span>` });
-	const side = h("aside", { class: "aic-side" },
-		h("div", { class: "aic-brand" }, "chat"),
-		h("div", { class: "aic-navs" }, newBtn, searchBtn),
-		recentLabel,
-		list,
-		h("div", { class: "aic-side-foot" }, settingsBtn),
+	const modelBtn = h("button", { class: "aic-model-btn", type: "button", "aria-haspopup": "listbox" });
+	const modelFilter = h("input", { class: "aic-model-filter", type: "text", placeholder: "Search models", autocomplete: "off", spellcheck: "false" });
+	const modelList = h("div", { class: "aic-model-list", role: "listbox" });
+	const modelMenu = h("div", { class: "aic-model-menu" }, modelFilter, modelList);
+	const model = h("div", { class: "aic-model" }, modelBtn, modelMenu);
+
+	const historyBtn = iconBtn("history", `history (${isMac ? "⌘K" : "Ctrl K"})`, "aic-history-btn");
+	const newBtn = iconBtn("newChat", "new chat");
+	const settingsBtn = iconBtn("settings", "settings");
+	const head = h("header", { class: "aic-head" },
+		h("div", { class: "aic-brand", html: `<span class="aic-mark">${svg("umbrella")}</span><span>Umbrella <b>AI</b></span>` }),
+		model,
+		h("span", { class: "aic-grow" }),
+		newBtn, historyBtn, settingsBtn,
 	);
-	const scrim = h("div", { class: "aic-scrim" });
 
-	const menuBtn = iconBtn("panel", "toggle sidebar", "aic-menu");
-	const topNew = iconBtn("newChat", "new chat", "aic-top-new");
-	const top = h("div", { class: "aic-top" }, menuBtn, h("div", { class: "aic-top-title" }), topNew);
-
-	const greet = h("h1", { class: "aic-greet", html: 'Hi, what\'s on <span>your mind</span>?' });
-	const hero = h("div", { class: "aic-hero" }, greet);
+	const suggest = h("div", { class: "aic-suggest" }, ...SUGGESTIONS.map((s) =>
+		h("button", {
+			class: "aic-suggest-btn",
+			type: "button",
+			onclick: () => {
+				input.value = s.prompt;
+				autoResize();
+				input.focus();
+				input.setSelectionRange(input.value.length, input.value.length);
+			},
+		}, s.label)));
+	const hero = h("div", { class: "aic-hero" },
+		h("div", { class: "aic-hero-mark", html: svg("umbrella") }),
+		h("h1", { class: "aic-greet" }, "What can I help with?"),
+		h("p", { class: "aic-sub" }, "Ask anything, attach files, or turn on web search."),
+	);
 	const thread = h("div", { class: "aic-thread" });
 	const scroller = h("div", { class: "aic-scroll" }, thread);
 
 	const fileInput = h("input", { type: "file", multiple: true, hidden: true, accept: "image/*,text/*,.md,.json,.js,.mjs,.ts,.tsx,.jsx,.py,.java,.c,.cpp,.h,.cs,.go,.rs,.rb,.php,.lua,.sh,.yml,.yaml,.toml,.ini,.xml,.html,.css,.csv,.sql,.log" });
-	const attachBtn = iconBtn("plus", "attach files", "aic-attach");
-	const input = h("textarea", { class: "aic-input", placeholder: "Ask anything", rows: "1", spellcheck: "true" });
-	const webBtn = iconBtn("globe", "search the web", "aic-web");
-	const modelBtn = h("button", { class: "aic-model-btn", type: "button", "aria-haspopup": "listbox" });
-	const modelFilter = h("input", { class: "aic-model-filter", type: "text", placeholder: "search models", autocomplete: "off", spellcheck: "false" });
-	const modelList = h("div", { class: "aic-model-list", role: "listbox" });
-	const modelMenu = h("div", { class: "aic-model-menu" }, modelFilter, modelList);
-	const model = h("div", { class: "aic-model" }, modelBtn, modelMenu);
+	const attachBtn = iconBtn("clip", "attach files");
+	const input = h("textarea", { class: "aic-input", placeholder: "Message Umbrella AI", rows: "1", spellcheck: "true" });
+	const webBtn = h("button", { class: "aic-pill", type: "button", html: `${svg("globe")}<span>Web</span>` });
 	const sendBtn = h("button", { class: "aic-send", type: "button", "aria-label": "send", html: svg("up") });
 	const chips = h("div", { class: "aic-chips" });
-	const bar = h("div", { class: "aic-bar" },
+	const box = h("div", { class: "aic-box" },
 		chips,
-		h("div", { class: "aic-bar-row" }, attachBtn, input, webBtn, model, sendBtn),
+		input,
+		h("div", { class: "aic-box-row" }, attachBtn, webBtn, h("span", { class: "aic-grow" }), sendBtn),
 	);
-	const composer = h("div", { class: "aic-composer" }, bar, fileInput, h("p", { class: "aic-hint" }, "AI can make mistakes. Check important info."));
-	const main = h("section", { class: "aic-main" }, top, scroller, hero, composer);
+	const composer = h("div", { class: "aic-composer" }, box, fileInput, suggest,
+		h("p", { class: "aic-hint" }, "Umbrella AI can make mistakes. Check important info."));
+	const main = h("section", { class: "aic-main" }, scroller, hero, composer);
 
-	const searchInput = h("input", { class: "aic-search-input", type: "text", placeholder: "Search chats", autocomplete: "off", spellcheck: "false" });
-	const searchResults = h("div", { class: "aic-search-results" });
-	const searchClose = iconBtn("x", "close");
-	const searchModal = h("div", { class: "aic-modal", role: "dialog", "aria-label": "search chats", hidden: true },
-		h("div", { class: "aic-modal-card aic-search-card" },
-			h("div", { class: "aic-search-head", html: svg("search") }, searchInput, searchClose),
-			searchResults,
-		),
+	const historySearch = h("input", { class: "aic-history-search", type: "text", placeholder: "Search chats", autocomplete: "off", spellcheck: "false" });
+	const historyClose = iconBtn("x", "close history", "aic-history-close");
+	const list = h("nav", { class: "aic-list" });
+	const historyCount = h("p", { class: "aic-history-foot" });
+	const history = h("aside", { class: "aic-history", "aria-label": "chat history" },
+		h("div", { class: "aic-history-head" }, h("h2", {}, "History"), historyClose),
+		h("label", { class: "aic-history-find", html: svg("search") }, historySearch),
+		list,
+		historyCount,
 	);
+	const scrim = h("div", { class: "aic-scrim" });
 
 	const systemInput = h("textarea", { class: "aic-field", rows: "5", placeholder: "e.g. answer briefly and use simple words" });
 	const settingsClose = iconBtn("x", "close");
 	const settingsSave = h("button", { class: "aic-btn aic-btn-primary", type: "button" }, "Save");
 	const clearAll = h("button", { class: "aic-btn aic-btn-danger", type: "button" }, "Delete all chats");
 	const settingsModal = h("div", { class: "aic-modal", role: "dialog", "aria-label": "settings", hidden: true },
-		h("div", { class: "aic-modal-card aic-settings-card" },
+		h("div", { class: "aic-modal-card" },
 			h("div", { class: "aic-modal-head" }, h("h2", {}, "Settings"), settingsClose),
 			h("label", { class: "aic-field-label" }, "Custom instructions",
 				h("small", {}, "sent with every chat, so the model knows how you want answers"), systemInput),
@@ -274,15 +294,23 @@ export function mountAiChat(root) {
 	);
 
 	root.classList.add("aic");
-	root.append(side, scrim, main, searchModal, settingsModal);
+	root.append(head, h("div", { class: "aic-body" }, main, scrim, history), settingsModal);
 
-	function setSidebar(open) {
-		root.classList.toggle("aic-side-open", open);
+	const narrow = () => root.clientWidth <= 860;
+
+	function setHistory(open, remember = true) {
+		root.classList.toggle("aic-history-open", open);
+		historyBtn.classList.toggle("on", open);
+		historyBtn.setAttribute("aria-pressed", open ? "true" : "false");
+		if (remember && !narrow()) {
+			state.history = open;
+			save();
+		}
 	}
 
 	function renderModelBtn() {
 		const m = MODELS.find((x) => x.id === state.model) ?? MODELS[0];
-		modelBtn.innerHTML = `<span>${esc(m.label)}</span>${svg("chevron", "aic-ico aic-chev")}`;
+		modelBtn.innerHTML = `<span class="aic-dot" data-p="${m.p}"></span><span class="aic-model-label">${esc(m.label)}</span>${svg("chevron", "aic-ico aic-chev")}`;
 	}
 
 	function renderModelList() {
@@ -330,7 +358,7 @@ export function mountAiChat(root) {
 	function renderWeb() {
 		webBtn.classList.toggle("on", state.web);
 		webBtn.setAttribute("aria-pressed", state.web ? "true" : "false");
-		webBtn.title = state.web ? "web search on" : "search the web";
+		webBtn.title = state.web ? "web search is on" : "search the web for answers";
 	}
 	webBtn.addEventListener("click", () => {
 		state.web = !state.web;
@@ -339,9 +367,14 @@ export function mountAiChat(root) {
 	});
 
 	function renderList() {
-		list.replaceChildren();
-		recentLabel.hidden = !state.chats.length;
-		for (const chat of state.chats) {
+		const q = historySearch.value.trim().toLowerCase();
+		const hits = state.chats.filter((c) => !q || c.title.toLowerCase().includes(q) ||
+			c.messages.some((m) => typeof m.content === "string" && m.content.toLowerCase().includes(q)));
+		const nodes = [];
+		let group = "";
+		for (const chat of hits) {
+			const g = timeGroup(chat.updated || 0);
+			if (g !== group) { group = g; nodes.push(h("div", { class: "aic-label" }, g)); }
 			const del = h("button", { class: "aic-item-del", type: "button", title: "delete chat", "aria-label": "delete chat", html: svg("trash") });
 			const item = h("div", { class: `aic-item${chat === current ? " active" : ""}`, role: "button", tabindex: "0", title: chat.title },
 				h("span", {}, chat.title), del);
@@ -351,17 +384,21 @@ export function mountAiChat(root) {
 				e.stopPropagation();
 				deleteChat(chat);
 			});
-			list.append(item);
+			nodes.push(item);
 		}
+		if (!nodes.length) nodes.push(h("p", { class: "aic-list-empty" }, state.chats.length ? "No chats match" : "Your chats will show up here"));
+		list.replaceChildren(...nodes);
+		historyCount.textContent = state.chats.length
+			? `${state.chats.length} chat${state.chats.length === 1 ? "" : "s"} saved in this browser`
+			: "";
 	}
-
-	function setTitle() {
-		top.querySelector(".aic-top-title").textContent = current?.title || "";
-	}
+	historySearch.addEventListener("input", renderList);
+	historySearch.addEventListener("keydown", (e) => {
+		if (e.key === "Enter") { e.preventDefault(); list.querySelector(".aic-item")?.click(); }
+	});
 
 	function renderEmpty() {
-		const empty = !current?.messages.length;
-		main.classList.toggle("empty", empty);
+		main.classList.toggle("empty", !current?.messages.length);
 	}
 
 	function messageNode(m) {
@@ -371,14 +408,14 @@ export function mountAiChat(root) {
 				node.append(h("div", { class: "aic-msg-files" }, ...m.files.map((f) =>
 					f.kind === "image" && f.data
 						? h("img", { class: "aic-msg-img", src: f.data, alt: f.name })
-						: h("span", { class: "aic-chip static", html: `${svg(f.kind === "image" ? "file" : "file")}<span>${esc(f.name)}</span>` }))));
+						: h("span", { class: "aic-chip static", html: `${svg("file")}<span>${esc(f.name)}</span>` }))));
 			}
 			if (m.content) node.append(h("div", { class: "aic-bubble" }, m.content));
 		} else {
 			const body = h("div", { class: "aic-md", html: m.error ? `<p class="aic-err">${esc(m.content)}</p>` : md(m.content) });
-			node.append(body);
+			node.append(h("span", { class: "aic-avatar", html: svg("umbrella") }), h("div", { class: "aic-reply" }, body));
 			if (m.sources?.length) {
-				node.append(h("div", { class: "aic-sources" }, ...m.sources.map((s, i) =>
+				node.lastChild.append(h("div", { class: "aic-sources" }, ...m.sources.map((s, i) =>
 					h("a", { href: s.url, target: "_blank", rel: "noopener noreferrer", title: s.url }, `${i + 1}. ${s.title || s.url}`))));
 			}
 		}
@@ -388,7 +425,6 @@ export function mountAiChat(root) {
 	function renderThread() {
 		thread.replaceChildren(...(current?.messages ?? []).map(messageNode));
 		renderEmpty();
-		setTitle();
 		scroller.scrollTop = scroller.scrollHeight;
 	}
 
@@ -399,7 +435,7 @@ export function mountAiChat(root) {
 		renderChips();
 		renderThread();
 		renderList();
-		setSidebar(false);
+		if (narrow()) setHistory(false, false);
 		input.focus({ preventScroll: true });
 	}
 
@@ -410,7 +446,7 @@ export function mountAiChat(root) {
 		renderChips();
 		renderThread();
 		renderList();
-		setSidebar(false);
+		if (narrow()) setHistory(false, false);
 		input.value = "";
 		autoResize();
 		input.focus({ preventScroll: true });
@@ -424,9 +460,9 @@ export function mountAiChat(root) {
 	}
 
 	newBtn.addEventListener("click", newChat);
-	topNew.addEventListener("click", newChat);
-	menuBtn.addEventListener("click", () => setSidebar(!root.classList.contains("aic-side-open")));
-	scrim.addEventListener("click", () => setSidebar(false));
+	historyBtn.addEventListener("click", () => setHistory(!root.classList.contains("aic-history-open")));
+	historyClose.addEventListener("click", () => setHistory(false));
+	scrim.addEventListener("click", () => setHistory(false, false));
 
 	function renderChips() {
 		chips.replaceChildren(...pending.map((f, i) => {
@@ -477,17 +513,20 @@ export function mountAiChat(root) {
 		const files = [...(e.clipboardData?.files ?? [])];
 		if (files.length) { e.preventDefault(); addFiles(files); }
 	});
-	bar.addEventListener("dragover", (e) => { e.preventDefault(); bar.classList.add("drag"); });
-	bar.addEventListener("dragleave", () => bar.classList.remove("drag"));
-	bar.addEventListener("drop", (e) => {
+	box.addEventListener("dragover", (e) => { e.preventDefault(); box.classList.add("drag"); });
+	box.addEventListener("dragleave", () => box.classList.remove("drag"));
+	box.addEventListener("drop", (e) => {
 		e.preventDefault();
-		bar.classList.remove("drag");
+		box.classList.remove("drag");
 		if (e.dataTransfer?.files?.length) addFiles([...e.dataTransfer.files]);
+	});
+	box.addEventListener("click", (e) => {
+		if (e.target === box) input.focus();
 	});
 
 	function autoResize() {
 		input.style.height = "auto";
-		input.style.height = Math.min(input.scrollHeight, 220) + "px";
+		input.style.height = Math.min(input.scrollHeight, 240) + "px";
 		updateSend();
 	}
 
@@ -550,7 +589,6 @@ export function mountAiChat(root) {
 		autoResize();
 		save();
 		renderList();
-		setTitle();
 		renderEmpty();
 		thread.append(messageNode(userMsg));
 
@@ -558,8 +596,8 @@ export function mountAiChat(root) {
 		const reply = { role: "assistant", content: "" };
 		const node = h("div", { class: "aic-msg assistant" });
 		const body = h("div", { class: "aic-md" });
-		const status = h("div", { class: "aic-status" }, h("span", { class: "aic-pulse" }), h("span", {}, state.web ? "searching the web" : "thinking"));
-		node.append(status, body);
+		const status = h("div", { class: "aic-status" }, h("span", { class: "aic-pulse" }), h("span", {}, state.web ? "Searching the web" : "Thinking"));
+		node.append(h("span", { class: "aic-avatar", html: svg("umbrella") }), h("div", { class: "aic-reply" }, status, body));
 		thread.append(node);
 		scroller.scrollTop = scroller.scrollHeight;
 
@@ -578,11 +616,11 @@ export function mountAiChat(root) {
 						results.map((r, i) => `[${i + 1}] ${r.title} (${r.url}): ${r.snippet}`).join("\n");
 				}
 			} catch {}
-			status.lastChild.textContent = "thinking";
+			status.lastChild.textContent = "Thinking";
 		}
 
-		const history = chat.messages.slice(-20).map((m, i, arr) => toApi(m, i === arr.length - 1 ? extra : ""));
-		if (state.system.trim()) history.unshift({ role: "system", content: state.system.trim() });
+		const apiMessages = chat.messages.slice(-20).map((m, i, arr) => toApi(m, i === arr.length - 1 ? extra : ""));
+		if (state.system.trim()) apiMessages.unshift({ role: "system", content: state.system.trim() });
 
 		let stick = true;
 		const onScroll = () => { stick = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 80; };
@@ -599,7 +637,7 @@ export function mountAiChat(root) {
 			const res = await fetch("/api/ai/chat", {
 				method: "POST",
 				headers: { "Content-Type": "application/json" },
-				body: JSON.stringify({ model: state.model, messages: history, stream: true, max_tokens: 4096 }),
+				body: JSON.stringify({ model: state.model, messages: apiMessages, stream: true, max_tokens: 4096 }),
 				signal,
 			});
 			if (!res.ok) {
@@ -641,10 +679,8 @@ export function mountAiChat(root) {
 			reader.cancel().catch(() => {});
 			if (!reply.content) throw new Error("the model sent an empty reply, try another model");
 		} catch (err) {
-			if (err.name !== "AbortError" || !reply.content) {
-				if (err.name === "AbortError") reply.content = reply.content || "stopped";
-				else if (!reply.content) { reply.content = err.message || "something went wrong"; reply.error = true; }
-			}
+			if (err.name === "AbortError") reply.content = reply.content || "Stopped.";
+			else if (!reply.content) { reply.content = err.message || "something went wrong"; reply.error = true; }
 		} finally {
 			if (frame) cancelAnimationFrame(frame);
 			scroller.removeEventListener("scroll", onScroll);
@@ -672,73 +708,18 @@ export function mountAiChat(root) {
 		}).catch(() => {});
 	});
 
-	function openModal(m) {
-		m.hidden = false;
-		root.classList.add("aic-modal-open");
-	}
-	function closeModal(m) {
-		m.hidden = true;
-		if (searchModal.hidden && settingsModal.hidden) root.classList.remove("aic-modal-open");
-	}
-	for (const m of [searchModal, settingsModal]) {
-		m.addEventListener("click", (e) => { if (e.target === m) closeModal(m); });
-	}
-
-	function renderSearch() {
-		const q = searchInput.value.trim().toLowerCase();
-		const hits = state.chats.filter((c) => !q || c.title.toLowerCase().includes(q) ||
-			c.messages.some((m) => typeof m.content === "string" && m.content.toLowerCase().includes(q)));
-		if (!hits.length) {
-			searchResults.replaceChildren(h("p", { class: "aic-search-empty" }, state.chats.length ? "No chats found" : "No chats yet"));
-			return;
-		}
-		let group = "";
-		const nodes = [];
-		for (const c of hits.slice(0, 50)) {
-			const g = timeGroup(c.updated || 0);
-			if (g !== group) { group = g; nodes.push(h("div", { class: "aic-label" }, g)); }
-			let snippet = "";
-			if (q) {
-				const m = c.messages.find((m) => typeof m.content === "string" && m.content.toLowerCase().includes(q));
-				if (m) {
-					const i = m.content.toLowerCase().indexOf(q);
-					snippet = (i > 30 ? "…" : "") + m.content.slice(Math.max(0, i - 30), i + 70).replace(/\s+/g, " ");
-				}
-			}
-			nodes.push(h("button", {
-				class: "aic-search-hit",
-				type: "button",
-				onclick: () => { closeModal(searchModal); openChat(c); },
-			}, h("span", { html: svg("newChat") }), h("span", { class: "aic-search-text" },
-				h("strong", {}, c.title), snippet ? h("small", {}, snippet) : null)));
-		}
-		searchResults.replaceChildren(...nodes);
-	}
-
-	function openSearch() {
-		searchInput.value = "";
-		renderSearch();
-		openModal(searchModal);
-		searchInput.focus();
-	}
-	searchBtn.addEventListener("click", openSearch);
-	searchClose.addEventListener("click", () => closeModal(searchModal));
-	searchInput.addEventListener("input", renderSearch);
-	searchInput.addEventListener("keydown", (e) => {
-		if (e.key === "Enter") { e.preventDefault(); searchResults.querySelector(".aic-search-hit")?.click(); }
-	});
-
 	settingsBtn.addEventListener("click", () => {
 		systemInput.value = state.system;
-		openModal(settingsModal);
+		settingsModal.hidden = false;
 		systemInput.focus();
 	});
-	settingsClose.addEventListener("click", () => closeModal(settingsModal));
+	settingsClose.addEventListener("click", () => (settingsModal.hidden = true));
+	settingsModal.addEventListener("click", (e) => { if (e.target === settingsModal) settingsModal.hidden = true; });
 	settingsSave.addEventListener("click", () => {
 		state.system = systemInput.value;
 		save();
-		closeModal(settingsModal);
-		flash("settings saved");
+		settingsModal.hidden = true;
+		flash("Settings saved");
 	});
 	clearAll.addEventListener("click", () => {
 		if (!state.chats.length) return;
@@ -746,7 +727,7 @@ export function mountAiChat(root) {
 		state.chats = [];
 		save();
 		newChat();
-		closeModal(settingsModal);
+		settingsModal.hidden = true;
 	});
 
 	const onKey = (e) => {
@@ -755,13 +736,13 @@ export function mountAiChat(root) {
 		if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "k") {
 			e.preventDefault();
 			e.stopPropagation();
-			if (searchModal.hidden) openSearch();
-			else closeModal(searchModal);
+			setHistory(true, false);
+			historySearch.focus();
+			historySearch.select();
 		} else if (e.key === "Escape") {
-			if (!searchModal.hidden) closeModal(searchModal);
-			else if (!settingsModal.hidden) closeModal(settingsModal);
+			if (!settingsModal.hidden) settingsModal.hidden = true;
 			else if (model.classList.contains("open")) closeModelMenu();
-			else if (root.classList.contains("aic-side-open")) setSidebar(false);
+			else if (narrow() && root.classList.contains("aic-history-open")) setHistory(false, false);
 			else return;
 			e.stopPropagation();
 		}
@@ -774,5 +755,6 @@ export function mountAiChat(root) {
 	renderThread();
 	renderChips();
 	autoResize();
+	requestAnimationFrame(() => setHistory(!!state.history && !narrow(), false));
 	return { focus: () => input.focus({ preventScroll: true }) };
 }

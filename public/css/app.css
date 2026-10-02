@@ -1332,11 +1332,10 @@ body.collapsed.peek .sidebar {
 	justify-content: center;
 	width: 20px;
 	height: 20px;
-	font-size: 14px;
-	border-radius: 4px;
-	background: linear-gradient(135deg, var(--accent), #a855f7);
-	color: #fff;
-	-webkit-text-fill-color: #fff;
+	font-size: 0;
+	background: var(--accent);
+	-webkit-mask: url(/img/logo.svg) center / 16px no-repeat;
+	mask: url(/img/logo.svg) center / 16px no-repeat;
 }
 
 .ai-frame {
