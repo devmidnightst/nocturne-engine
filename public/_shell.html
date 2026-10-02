@@ -108,6 +108,7 @@
 					<button class="chip" data-action="reload">reload</button>
 					<button class="chip" data-action="compat">compat mode</button>
 					<button class="chip" data-action="mode">switch mode</button>
+					<button class="chip" data-action="adblock-off" hidden>turn off for this site</button>
 					<button class="chip ghost" data-action="dismiss" aria-label="dismiss">✕</button>
 				</div>
 			</div>
@@ -185,6 +186,11 @@
 						<input type="text" id="cfg-s1" spellcheck="false" placeholder="auto" />
 						<small>leave empty for auto. must end with a slash.</small>
 					</label>
+					<div class="field">
+						<span>ad blocking off on</span>
+						<ul id="adblock-off-list" class="chips"></ul>
+						<small>sites here load without the ad blocker.</small>
+					</div>
 					<div class="field">
 						<span>compat mode sites</span>
 						<ul id="compat-list" class="chips"></ul>

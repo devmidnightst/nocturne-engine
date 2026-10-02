@@ -28,6 +28,21 @@ const list = (v) =>
 		.map((s) => s.trim().toLowerCase())
 		.filter(Boolean);
 
+const urls = (v, d) => {
+	const out = (v || "")
+		.split(",")
+		.map((s) => s.trim())
+		.filter(Boolean);
+	return out.length ? out : d;
+};
+
+// the host based lists ublock origin turns on by default
+const DEFAULT_FILTER_LISTS = [
+	"https://easylist.to/easylist/easylist.txt",
+	"https://easylist.to/easylist/easyprivacy.txt",
+	"https://pgl.yoyo.org/adservers/serverlist.php?hostformat=hosts&showintro=0&mimetype=plaintext",
+];
+
 export const config = {
 	env: env.NODE_ENV || "production",
 	host: env.HOST || "0.0.0.0",
@@ -63,6 +78,13 @@ export const config = {
 		allow: list(env.TLS_ALLOWED_DOMAINS),
 		// optional file, one hostname per line, re-read when it changes
 		file: env.TLS_DOMAINS_FILE ? path.resolve(ROOT, env.TLS_DOMAINS_FILE) : null,
+	},
+
+	adblock: {
+		// host lists the client blocker merges with its built in one. "off" disables.
+		lists: env.ADBLOCK_LISTS === "off" ? [] : urls(env.ADBLOCK_LISTS, DEFAULT_FILTER_LISTS),
+		refreshHours: int(env.ADBLOCK_REFRESH_HOURS, 24),
+		cacheFile: path.resolve(ROOT, env.ADBLOCK_CACHE_FILE || "data/filters.json"),
 	},
 
 	brand: {

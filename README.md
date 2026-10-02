@@ -9,7 +9,9 @@ what makes it better than the stock scramjet demos:
 - **twelve patches to the 2.x bundles** fix real bugs, and the e2e suite fails on stock scramjet for every one of them it covers. two are aimed right at discord: websockets where the server talks first (the gateway), and set-cookie getting dropped by the http cache. details are in [docs/PATCHES.md](docs/PATCHES.md).
 - **error pages that say what actually broke**. stock scramjet shows "Internal Service Worker Error" for everything. umbrella tells you whether the domain doesn't exist, the server blocked it, the site refused, it timed out or tls failed. it asks the server to redo the dns and tcp step when the transport's own error is too vague.
 - **recovery**. when a page throws rewriter errors or loads blank, a banner offers a reload, compat mode for that site, or switching transport.
-- **optional ad and tracker blocking**, answered locally inside the proxied page, plus discord's telemetry endpoints.
+- **optional ad and tracker blocking**, answered locally inside the proxied page, plus discord's telemetry endpoints. the server pulls the host rules from easylist, easyprivacy and peter lowe's list (the ones ublock origin turns on by default) once a day. known ad libraries (gpt, adsbygoogle, analytics.js) get harmless stand ins so pages that call them keep working.
+- **youtube ad blocking** the way ublock origin does it: ad fields are cut out of player and feed responses, leftover ad slots are hidden and any ad that still starts gets skipped.
+- **anti adblock detection**. when a site puts up a "turn off your ad blocker" wall, a banner offers to turn blocking off for just that site. the list lives in settings.
 - **custom domains** with caddy on_demand_tls and an allowlist endpoint, so nobody can make your box request certs for random hostnames.
 
 ## layout

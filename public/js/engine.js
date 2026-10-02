@@ -8,6 +8,8 @@ import {
 } from "./plugins/core-plugins.js";
 import { _CP } from "./plugins/captcha-plugin.js";
 import { _CK } from "./plugins/cloak-plugin.js";
+import { _AB } from "./plugins/adblock-plugin.js";
+import { loadFilterLists } from "./plugins/blocklist.js";
 
 const _nc_ctrl = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
 const _nc_core = globalThis[atob("JHNjcmFtamV0")];
@@ -29,6 +31,15 @@ const CONTROLLER_CONFIG = {
 };
 
 export const COMPAT_FLAGS = { destructureRewrites: false, encapsulateWorkers: false };
+
+export const siteKey = (host) => String(host || "").toLowerCase().replace(/^www\./, "");
+
+function adblockOn(url) {
+	const s = settings.get();
+	if (!s.blockAds) return false;
+	if (!url) return true;
+	return !s.adblockOff.includes(siteKey(url.hostname));
+}
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\/]/g, "\\$&");
 const siteFlagKey = (origin) => `^${escapeRegex(origin)}(/|$)`;
@@ -301,16 +312,36 @@ export async function createEngine(events = {}, onStatus) {
 	});
 
 	const tabs = new Set();
+	if (settings.get().blockAds) loadFilterLists();
+	settings.onChange((next, patch) => {
+		if (patch.blockAds) loadFilterLists();
+	});
 
 	function createTab(iframe, tabEvents = {}) {
-		const blocker = new _CB(() => settings.get().blockAds);
+		let site = null;
+		const setSite = (url) => {
+			try {
+				site = new URL(url);
+			} catch {
+			}
+		};
+		const blocking = () => adblockOn(site);
+		const blocker = new _CB(blocking, () => site);
 		const cache = new HttpCachePlugin();
 		const perFrame = _fT(() => _t);
 		const plugins = [
 			new _CK(),
 			cache,
-			new UrlWatcherPlugin((url) => tabEvents.onUrl?.(url)),
+			new UrlWatcherPlugin((url) => {
+				if (url && url !== "about:blank") setSite(url);
+				tabEvents.onUrl?.(url);
+			}),
 			new CatchEscapedLinksPlugin((url) => new URL(`/?go=${encodeURIComponent(url.href)}`, location.origin)),
+			new _AB({
+				isEnabled: blocking,
+				onNavigate: setSite,
+				onAntiAdblock: (info) => tabEvents.onAntiAdblock?.(info),
+			}),
 			blocker,
 			new _CP(),
 			new _EP((info) => tabEvents.onError?.(info)),
@@ -403,6 +434,15 @@ export async function createEngine(events = {}, onStatus) {
 			for (const t of tabs) t.frame.fetchHandler.client.transport = t.perFrame;
 			settings.set({ _m: kind });
 			return kind;
+		},
+		setAdblock(host, on) {
+			const key = siteKey(host);
+			const list = new Set(settings.get().adblockOff);
+			on ? list.delete(key) : list.add(key);
+			settings.set({ adblockOff: [...list] });
+		},
+		isAdblockOff(host) {
+			return settings.get().adblockOff.includes(siteKey(host));
 		},
 		setCompat(origin, on) {
 			const list = new Set(settings.get().compatSites);
