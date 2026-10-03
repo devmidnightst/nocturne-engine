@@ -32,7 +32,9 @@
     "cookie-parser": "^1.4.7",
     "crypto-random-string": "^6.0.0",
     "express": "5.2.1",
-    "ipaddr.js": "2.5.0"
+    "impit": "0.14.5",
+    "ipaddr.js": "2.5.0",
+    "node-html-parser": "9.0.4"
   },
   "devDependencies": {
     "playwright-core": "1.55.0",
