@@ -35,4 +35,4 @@ const probe = String(
 	)
 );
 vm.runInThisContext(probe);
-process.stdout.write(JSON.stringify({ out, R1: globalThis.R1, R2: globalThis.R2, diag: self.__umbrellaDiag }));
+process.stdout.write(JSON.stringify({ out, R1: globalThis.R1, R2: globalThis.R2, diag: self.__nc_d7f2 }));

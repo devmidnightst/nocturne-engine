@@ -19,14 +19,15 @@ const get = (p, init) => fetch(base + p, init);
 
 test("engine assets are served with the right types", async () => {
 	const cases = {
-		"/scramjet/scramjet.js": "text/javascript",
-		"/scramjet/scramjet.wasm": "application/wasm",
-		"/controller/controller.api.js": "text/javascript",
-		"/controller/controller.sw.js": "text/javascript",
-		"/controller/controller.inject.js": "text/javascript",
-		"/utils/scramjet-utils.js": "text/javascript",
-		"/transports/epoxy.mjs": "text/javascript",
-		"/transports/libcurl.mjs": "text/javascript",
+		"/assets/r/runtime.js": "text/javascript",
+		"/assets/r/core.wasm": "application/wasm",
+		"/assets/r/api.js": "text/javascript",
+		"/assets/r/sw.js": "text/javascript",
+		"/assets/r/inject.js": "text/javascript",
+		"/assets/r/utils.js": "text/javascript",
+		"/assets/r/transport.epoxy.mjs": "text/javascript",
+		"/assets/r/transport.alt.mjs": "text/javascript",
+		"/assets/r/transport.mjs": "text/javascript",
 	};
 	for (const [p, type] of Object.entries(cases)) {
 		const res = await get(p);
@@ -38,12 +39,13 @@ test("engine assets are served with the right types", async () => {
 });
 
 test("patched bundles are what gets served", async () => {
-	for (const p of ["/scramjet/scramjet.js", "/controller/controller.inject.js", "/utils/scramjet-utils.js"]) {
+	for (const p of ["/assets/r/runtime.js", "/assets/r/inject.js", "/assets/r/utils.js", "/assets/r/transport.mjs"]) {
 		const text = await (await get(p)).text();
-		assert.ok(text.startsWith("/* patched by umbrella:"), p);
+		assert.ok(text.startsWith("/* p8q2:"), p);
+		assert.doesNotMatch(text.slice(0, 200), /umbrella/i, p);
 	}
-	const etag = (await get("/scramjet/scramjet.js")).headers.get("etag");
-	const again = await get("/scramjet/scramjet.js", { headers: { "if-none-match": etag } });
+	const etag = (await get("/assets/r/runtime.js")).headers.get("etag");
+	const again = await get("/assets/r/runtime.js", { headers: { "if-none-match": etag } });
 	assert.equal(again.status, 304);
 });
 
@@ -51,16 +53,21 @@ test("service worker is uncached and allowed at the root scope", async () => {
 	const res = await get("/sw.js");
 	assert.equal(res.headers.get("service-worker-allowed"), "/");
 	assert.match(res.headers.get("cache-control"), /no-store/);
-	assert.match(await res.text(), /controller\.sw\.js/);
+	assert.match(await res.text(), /\/assets\/r\/sw\.js/);
 });
 
 test("shell pages", async () => {
 	const index = await get("/");
 	assert.equal(index.status, 200);
-	assert.match(await index.text(), /<title>Umbrella<\/title>/);
+	const disguise = await index.text();
+	assert.doesNotMatch(disguise, /id="tab-list"/);
+	assert.match(disguise, /eC1uZi1yYXc=/);
+	const shell = await get("/", { headers: { "x-nf-raw": "1" } });
+	assert.equal(shell.status, 200);
+	assert.match(await shell.text(), /id="tab-list"/);
 	const missing = await get("/definitely/not/here");
 	assert.equal(missing.status, 404);
-	assert.match(await missing.text(), /Umbrella/);
+	assert.match(await missing.text(), /<title>404<\/title>/);
 });
 
 test("tls ask endpoint", async () => {
@@ -70,11 +77,11 @@ test("tls ask endpoint", async () => {
 	assert.equal((await get("/api/tls-ask")).status, 404);
 });
 
-test("health reports patches", async () => {
+test("health answers without naming the engine", async () => {
 	const body = await (await get("/api/health")).json();
 	assert.equal(body.ok, true);
-	assert.equal(body.scramjet, "2.0.67-alpha.2");
-	assert.deepEqual(body.patches["/scramjet/scramjet.js"].skipped, []);
+	assert.equal(body.scramjet, undefined);
+	assert.equal(body.patches, undefined);
 });
 
 test("diagnose follows the wisp ip policy", async () => {

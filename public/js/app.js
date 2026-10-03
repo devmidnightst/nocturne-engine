@@ -35,6 +35,7 @@ const ui = {
 	banner: $("banner"),
 	toast: $("toast"),
 	tabList: $("tab-list"),
+	media: $("media-list"),
 	essentials: $("essentials-grid"),
 	tabCount: $("tab-count"),
 	mobileUrl: $("mobile-url"),
@@ -165,7 +166,7 @@ function writeSession() {
 	clearTimeout(saveTimer);
 	saveTimer = null;
 	session.save({
-		tabs: tabs.map(({ id, url, title }) => ({ id, url, title })),
+		tabs: tabs.filter((t) => !t.closing).map(({ id, url, title, type, gameId }) => ({ id, url, title, type, gameId })),
 		active: active?.id ?? null,
 	});
 }
@@ -174,11 +175,33 @@ function saveSession() {
 	saveTimer ??= setTimeout(writeSession, 100);
 }
 
+function reloadedPage() {
+	try {
+		return performance.getEntriesByType("navigation")[0]?.type === "reload";
+	} catch {
+		return false;
+	}
+}
+
+function restoreTab(t) {
+	if (!t || typeof t.id !== "string") return null;
+	if (t.type === "ai") return { ...makeAiTab(), id: t.id };
+	if (t.type === "games") return { ...makeGamesTab(), id: t.id };
+	if (t.type === "game") {
+		if (t.gameId == null) return null;
+		const tab = makeTab({ id: t.id, title: t.title || "game", type: "game" });
+		tab.gameId = t.gameId;
+		return tab;
+	}
+	return typeof t.url === "string" ? makeTab({ id: t.id, url: t.url, title: t.title || "" }) : null;
+}
+
 function restoreSession() {
-	const saved = session.load();
+	const saved = reloadedPage() ? session.load() : null;
 	if (saved && Array.isArray(saved.tabs)) {
 		for (const t of saved.tabs) {
-			if (t && typeof t.url === "string") tabs.push(makeTab(t));
+			const tab = restoreTab(t);
+			if (tab) tabs.push(tab);
 		}
 	}
 	if (!tabs.length) {
@@ -204,43 +227,275 @@ function scheduleRender() {
 	});
 }
 
-function renderTabs() {
-	ui.tabList.replaceChildren(
-		...tabs.map((tab) =>
+function tabIconKey(tab) {
+	if (tab.loading) return "spin";
+	if (tab.type === "ai" || tab.type === "games") return tab.type;
+	if (tab.type === "game") return `game:${tab.gameImg || ""}`;
+	if (!tab.url) return "blank";
+	const host = hostOf(tab.url);
+	return `fav:${host}:${icons.get(host)?.data ? 1 : 0}`;
+}
+
+function tabIcon(tab) {
+	if (tab.loading) return el("span", { class: "fav spinner" });
+	if (tab.type === "ai") return el("span", { class: "fav ai-fav" }, "✦");
+	if (tab.type === "games") return el("span", { class: "fav games-fav" }, "▦");
+	if (tab.type === "game") return tab.gameImg ? el("span", { class: "fav img" }, el("img", { src: tab.gameImg, alt: "" })) : el("span", { class: "fav" }, "▶");
+	if (tab.url) return favicon(tab.url);
+	return el("span", { class: "fav img blank" }, el("img", { src: "/img/logo.svg", alt: "" }));
+}
+
+const tabRows = new Map();
+
+function tabRow(tab) {
+	let row = tabRows.get(tab.id);
+	if (!row) {
+		row = el(
+			"li",
+			{ class: "tab-row entering", role: "tab", draggable: "true", "data-id": tab.id },
+			el("span", { class: "fav" }),
+			el("span", { class: "tab-title" }),
+			el("button", { class: "tab-audio", "data-audio": tab.id, hidden: "" }),
+			el("button", { class: "tab-close", "data-close": tab.id }, icon("M6 6l12 12M18 6L6 18"))
+		);
+		row.addEventListener("animationend", (e) => {
+			if (e.target === row && e.animationName === "tab-slide-in") row.classList.remove("entering");
+		});
+		tabRows.set(tab.id, row);
+	}
+	const isActive = tab === active;
+	const label = tabLabel(tab);
+	const tip = tab.url || "new tab";
+	row.classList.toggle("active", isActive);
+	row.classList.toggle("loading", !!tab.loading);
+	row.setAttribute("aria-selected", String(isActive));
+	if (row.title !== tip) row.title = tip;
+	const key = tabIconKey(tab);
+	if (row.dataset.icon !== key) {
+		row.dataset.icon = key;
+		row.firstElementChild.replaceWith(tabIcon(tab));
+	}
+	const title = row.querySelector(".tab-title");
+	if (title.textContent !== label) title.textContent = label;
+	const close = row.querySelector(".tab-close");
+	if (close.getAttribute("aria-label") !== `close ${label}`) close.setAttribute("aria-label", `close ${label}`);
+	const sound = tab.media?.muted ? "muted" : tab.media?.audible ? "on" : "";
+	if ((row.dataset.sound ?? "") !== sound) {
+		row.dataset.sound = sound;
+		const btn = row.querySelector(".tab-audio");
+		btn.hidden = !sound;
+		btn.classList.toggle("muted", sound === "muted");
+		btn.replaceChildren(icon(sound === "muted" ? ICONS.muted : ICONS.sound));
+		btn.title = sound === "muted" ? "unmute this tab" : "mute this tab";
+		btn.setAttribute("aria-label", btn.title);
+	}
+	return row;
+}
+
+const ICONS = {
+	sound: "M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13",
+	muted: "M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6",
+	play: "M8 5.5v13l10.5-6.5z",
+	pause: "M8.5 5.5v13M15.5 5.5v13",
+	prev: "M18 6.5v11l-8.5-5.5zM6.5 6.5v11",
+	next: "M6 6.5v11l8.5-5.5zM17.5 6.5v11",
+	pip: "M3.5 5.5h17v13h-17zM12.5 12h5.5v4h-5.5z",
+};
+
+function clock(sec) {
+	const s = Math.max(0, Math.floor(sec || 0));
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const ss = String(s % 60).padStart(2, "0");
+	return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
+function refreshMedia(tab) {
+	let next = null;
+	try {
+		next = tab.closing ? null : tab.handle?.media?.state() ?? null;
+	} catch {
+	}
+	tab.media = next;
+	scheduleRender();
+	scheduleMediaRender();
+	if (next?.playing) startMediaClock();
+}
+
+let mediaClock = null;
+function startMediaClock() {
+	if (mediaClock) return;
+	mediaClock = setInterval(() => {
+		const live = tabs.filter((t) => t.media);
+		for (const t of live) refreshMedia(t);
+		if (!tabs.some((t) => t.media?.playing)) {
+			clearInterval(mediaClock);
+			mediaClock = null;
+		}
+	}, 500);
+}
+
+let mediaQueued = false;
+function scheduleMediaRender() {
+	if (mediaQueued) return;
+	mediaQueued = true;
+	requestAnimationFrame(() => {
+		mediaQueued = false;
+		renderMedia();
+	});
+}
+
+const mediaCards = new Map();
+
+function mediaButton(act, id, path, label, extra = "") {
+	return el("button", { class: `icon-btn small media-btn ${extra}`, "data-media": act, "data-id": id, title: label, "aria-label": label }, icon(path));
+}
+
+function mediaCard(tab) {
+	let card = mediaCards.get(tab.id);
+	if (!card) {
+		card = el(
+			"div",
+			{ class: "media-card", "data-id": tab.id },
 			el(
-				"li",
-				{
-					class: `tab-row${tab === active ? " active" : ""}${tab.loading ? " loading" : ""}`,
-					role: "tab",
-					"aria-selected": String(tab === active),
-					draggable: "true",
-					title: tab.url || "new tab",
-					"data-id": tab.id,
-				},
-				tab.loading ? el("span", { class: "fav spinner" })
-					: tab.type === "ai" ? el("span", { class: "fav ai-fav" }, "✦")
-					: tab.type === "games" ? el("span", { class: "fav games-fav" }, "▦")
-					: tab.type === "game" ? (tab.gameImg ? el("span", { class: "fav img" }, el("img", { src: tab.gameImg, alt: "" })) : el("span", { class: "fav" }, "▶"))
-					: tab.url ? favicon(tab.url) : el("span", { class: "fav img blank" }, el("img", { src: "/img/logo.svg", alt: "" })),
-				el("span", { class: "tab-title" }, tabLabel(tab)),
-				el("button", { class: "tab-close", "aria-label": `close ${tabLabel(tab)}`, "data-close": tab.id }, icon("M6 6l12 12M18 6L6 18"))
+				"div",
+				{ class: "media-head" },
+				el("button", { class: "media-title", "data-media": "show", "data-id": tab.id }, el("b"), el("small")),
+				mediaButton("pip", tab.id, ICONS.pip, "picture in picture")
+			),
+			el(
+				"div",
+				{ class: "media-seek" },
+				el("span", { class: "media-time" }),
+				el("input", { class: "media-range", type: "range", min: "0", max: "0", step: "0.1", value: "0", "data-id": tab.id, "aria-label": "seek" }),
+				el("span", { class: "media-time" })
+			),
+			el(
+				"div",
+				{ class: "media-controls" },
+				mediaButton("prev", tab.id, ICONS.prev, "previous", "solid"),
+				mediaButton("toggle", tab.id, ICONS.play, "play", "solid media-play"),
+				mediaButton("next", tab.id, ICONS.next, "next", "solid"),
+				el("span", { class: "spacer" }),
+				mediaButton("mute", tab.id, ICONS.sound, "mute")
 			)
-		)
-	);
+		);
+		mediaCards.set(tab.id, card);
+	}
+	const m = tab.media;
+	const title = m.title || tabLabel(tab);
+	const sub = [m.artist, tab.url ? hostOf(tab.url) : ""].filter(Boolean).join(" · ");
+	const b = card.querySelector(".media-title b");
+	const small = card.querySelector(".media-title small");
+	if (b.textContent !== title) b.textContent = title;
+	if (small.textContent !== sub) small.textContent = sub;
+	card.querySelector(".media-title").title = title;
+	const seek = card.querySelector(".media-seek");
+	const range = card.querySelector(".media-range");
+	const [now, end] = card.querySelectorAll(".media-time");
+	seek.classList.toggle("live", m.live);
+	now.hidden = m.live;
+	if (!range.dragging) {
+		range.max = String(m.duration || 0);
+		range.value = String(Math.min(m.time, m.duration || 0));
+		now.textContent = clock(m.time);
+	}
+	range.disabled = !m.duration;
+	end.textContent = m.live ? "live" : clock(m.duration);
+	const play = card.querySelector('[data-media="toggle"]');
+	const playKey = m.playing ? "pause" : "play";
+	if (play.dataset.state !== playKey) {
+		play.dataset.state = playKey;
+		play.replaceChildren(icon(ICONS[playKey]));
+		play.title = playKey;
+		play.setAttribute("aria-label", playKey);
+		play.classList.toggle("solid", playKey === "play");
+	}
+	card.querySelector('[data-media="prev"]').hidden = !m.canPrev;
+	card.querySelector('[data-media="next"]').hidden = !m.canNext;
+	const pip = card.querySelector('[data-media="pip"]');
+	pip.hidden = !m.canPip;
+	pip.classList.toggle("on", m.pip);
+	const mute = card.querySelector('[data-media="mute"]');
+	const muteKey = m.muted ? "muted" : "sound";
+	if (mute.dataset.state !== muteKey) {
+		mute.dataset.state = muteKey;
+		mute.replaceChildren(icon(ICONS[muteKey]));
+		mute.title = m.muted ? "unmute this tab" : "mute this tab";
+		mute.setAttribute("aria-label", mute.title);
+	}
+	return card;
+}
+
+function renderMedia() {
+	const list = tabs.filter((t) => t.media && !t.closing).slice(0, 3);
+	const ids = new Set(list.map((t) => t.id));
+	for (const [id, card] of mediaCards) {
+		if (!ids.has(id)) {
+			card.remove();
+			mediaCards.delete(id);
+		}
+	}
+	let cursor = ui.media.firstElementChild;
+	for (const tab of list) {
+		const card = mediaCard(tab);
+		if (card === cursor) cursor = cursor.nextElementSibling;
+		else ui.media.insertBefore(card, cursor);
+	}
+	ui.media.hidden = !list.length;
+}
+
+function mediaOf(id) {
+	return tabs.find((t) => t.id === id && !t.closing);
+}
+
+function toggleTabMute(tab) {
+	const media = tab?.handle?.media;
+	if (!media) return;
+	media.setMuted(!media.muted);
+	refreshMedia(tab);
+}
+
+function renderTabs() {
+	const ids = new Set(tabs.map((t) => t.id));
+	for (const [id, row] of tabRows) {
+		if (!ids.has(id)) {
+			row.remove();
+			tabRows.delete(id);
+		}
+	}
+	let cursor = ui.tabList.firstElementChild;
+	for (const tab of tabs) {
+		const row = tabRow(tab);
+		if (row === cursor) cursor = cursor.nextElementSibling;
+		else ui.tabList.insertBefore(row, cursor);
+	}
+	while (cursor) {
+		const extra = cursor;
+		cursor = cursor.nextElementSibling;
+		extra.remove();
+	}
 	ui.tabCount.textContent = tabs.length === 1 ? "1 tab" : `${tabs.length} tabs`;
 	$("open-sidebar").setAttribute("aria-label", `show tabs (${tabs.length})`);
 	$("mobile-count").textContent = String(Math.min(tabs.length, 99));
 }
 
+let essentialsKey = null;
 function renderEssentials() {
-	const list = bookmarks.all();
+	const list = bookmarks.all().slice(0, 24);
+	const openUrls = new Set(tabs.map((t) => t.url));
+	const key = JSON.stringify([
+		active?.url ?? null,
+		list.map((b) => [b.url, b.title, openUrls.has(b.url), !!icons.get(hostOf(b.url))?.data]),
+	]);
+	if (key === essentialsKey) return;
+	essentialsKey = key;
 	if (!list.length) {
 		ui.essentials.replaceChildren(el("p", { class: "side-hint" }, "star a page to pin it here"));
 		return;
 	}
-	const openUrls = new Set(tabs.map((t) => t.url));
 	ui.essentials.replaceChildren(
-		...list.slice(0, 24).map((b) =>
+		...list.map((b) =>
 			el(
 				"button",
 				{
@@ -256,7 +511,7 @@ function renderEssentials() {
 }
 
 function openBookmark(url) {
-	const existing = tabs.find((t) => t.url === url);
+	const existing = tabs.find((t) => t.url === url && !t.closing);
 	if (existing) return activate(existing);
 	if (active && !active.url) return navigate(url);
 	navigate(url, { newTab: true });
@@ -379,7 +634,7 @@ function showFrames() {
 }
 
 function activate(tab) {
-	if (!tab) return;
+	if (!tab || tab.closing) return;
 	const changed = active !== tab;
 	active = tab;
 	if (tab.type === "game") {
@@ -425,25 +680,34 @@ function openTab(url, { opener = null, background = false } = {}) {
 
 function closeTab(tab) {
 	const i = tabs.indexOf(tab);
-	if (i === -1) return;
-	const row = ui.tabList.querySelector(`[data-id="${tab.id}"]`);
+	if (i === -1 || tab.closing) return;
+	tab.closing = true;
+	clearTimeout(tab.loadingTimer);
+	if (tab === active) {
+		const open = tabs.filter((t) => !t.closing);
+		const next = open.find((t) => t.id === tab.openerId) ?? open[Math.min(tabs.slice(0, i).filter((t) => !t.closing).length, open.length - 1)];
+		if (next) activate(next);
+		else openTab();
+	}
+	const row = tabRows.get(tab.id);
+	let done = false;
 	const finish = () => {
+		if (done) return;
+		done = true;
 		tab.aiDiv?.remove();
 		tab.handle?.destroy();
 		tab.iframe?.remove();
-		tabs.splice(tabs.indexOf(tab), 1);
-		if (!tabs.length) tabs.push(makeTab());
-		if (tab === active) {
-			active = null;
-			activate(tabs.find((t) => t.id === tab.openerId) ?? tabs[Math.min(i, tabs.length - 1)]);
-		} else {
-			scheduleRender();
-			saveSession();
-		}
+		const at = tabs.indexOf(tab);
+		if (at !== -1) tabs.splice(at, 1);
+		tab.media = null;
+		scheduleRender();
+		scheduleMediaRender();
+		saveSession();
 	};
-	if (row) {
+	if (row?.isConnected) {
 		row.classList.add("closing");
-		row.addEventListener("animationend", finish, { once: true });
+		row.addEventListener("animationend", (e) => e.target === row && e.animationName === "tab-slide-out" && finish());
+		setTimeout(finish, 300);
 	} else {
 		finish();
 	}
@@ -484,13 +748,16 @@ function showHome(tab = active) {
 
 function tabEvents(tab) {
 	const setTabLoading = (on) => {
+		clearTimeout(tab.loadingTimer);
+		if (on) tab.loadingTimer = setTimeout(() => setTabLoading(false), 30_000);
+		if (tab.loading === on) return;
 		tab.loading = on;
 		scheduleRender();
 		if (tab === active) setLoading(on);
 	};
 	return {
 		onUrl(url) {
-			if (!url || url === "about:blank") return;
+			if (!url || url === "about:blank" || !tabs.includes(tab)) return;
 			tab.url = url;
 			history.add(url, tab.title);
 			if (tab === active) syncChrome();
@@ -498,17 +765,21 @@ function tabEvents(tab) {
 			saveSession();
 		},
 		onTitle(title) {
+			if ((title || "") === tab.title) return;
 			tab.title = title || "";
 			if (tab.url) history.setTitle(tab.url, tab.title);
 			scheduleRender();
 			saveSession();
 		},
-		onLoading: setTabLoading,
+		onLoading(on) {
+			setTabLoading(on);
+			if (tab.media) refreshMedia(tab);
+		},
 		onIcon(src) {
 			if (tab.url) loadIcon(tab.url, src);
 		},
 		onOpen(url, { background = false } = {}) {
-			if (tabs.includes(tab)) openTab(url, { opener: tab, background });
+			if (tabs.includes(tab) && !tab.closing) openTab(url, { opener: tab, background });
 		},
 		onError(info) {
 			if (info.destination === "document" || info.destination === "iframe") setTabLoading(false);
@@ -517,6 +788,9 @@ function tabEvents(tab) {
 			if (!info.looksBlank || (info.errors === 0 && info.rewriteErrors === 0)) return;
 			tab.health = info;
 			if (tab === active) showHealth(info);
+		},
+		onMedia() {
+			refreshMedia(tab);
 		},
 		onAntiAdblock(info) {
 			tab.antiAdblock = info;
@@ -626,7 +900,42 @@ window.addEventListener("message", async (e) => {
 	}
 });
 
+ui.media.addEventListener("click", (e) => {
+	const btn = e.target.closest("[data-media]");
+	const tab = btn && mediaOf(btn.dataset.id);
+	if (!tab) return;
+	const media = tab.handle?.media;
+	const act = btn.dataset.media;
+	if (act === "show") return activate(tab);
+	if (!media) return;
+	if (act === "toggle") media.toggle();
+	else if (act === "prev") media.action("previoustrack");
+	else if (act === "next") media.action("nexttrack");
+	else if (act === "pip") media.pip();
+	else if (act === "mute") return toggleTabMute(tab);
+	setTimeout(() => refreshMedia(tab), 100);
+});
+ui.media.addEventListener("input", (e) => {
+	const range = e.target.closest(".media-range");
+	if (!range) return;
+	range.dragging = true;
+	range.parentElement.querySelector(".media-time").textContent = clock(Number(range.value));
+});
+ui.media.addEventListener("change", (e) => {
+	const range = e.target.closest(".media-range");
+	if (!range) return;
+	range.dragging = false;
+	const tab = mediaOf(range.dataset.id);
+	tab?.handle?.media?.seek(Number(range.value));
+	if (tab) setTimeout(() => refreshMedia(tab), 100);
+});
+
 ui.tabList.addEventListener("click", (e) => {
+	const audioId = e.target.closest("[data-audio]")?.dataset.audio;
+	if (audioId) {
+		e.stopPropagation();
+		return toggleTabMute(mediaOf(audioId));
+	}
 	const closeId = e.target.closest("[data-close]")?.dataset.close;
 	if (closeId) {
 		e.stopPropagation();
@@ -653,7 +962,7 @@ ui.tabList.addEventListener("dragover", (e) => {
 	if (!dragId) return;
 	e.preventDefault();
 	const row = e.target.closest(".tab-row");
-	for (const r of ui.tabList.children) r.classList.remove("drop-before", "drop-after");
+	clearDropMarks();
 	if (!row || row.dataset.id === dragId) return;
 	const box = row.getBoundingClientRect();
 	row.classList.add(e.clientY < box.top + box.height / 2 ? "drop-before" : "drop-after");
@@ -672,12 +981,18 @@ ui.tabList.addEventListener("drop", (e) => {
 		saveSession();
 	}
 	dragId = null;
+	clearDropMarks();
 	scheduleRender();
 });
 ui.tabList.addEventListener("dragend", () => {
 	dragId = null;
+	clearDropMarks();
 	scheduleRender();
 });
+
+function clearDropMarks() {
+	for (const r of ui.tabList.children) r.classList.remove("drop-before", "drop-after");
+}
 
 function applySidebarState() {
 	document.body.classList.toggle("collapsed", !!settings.get().sidebarCollapsed);
@@ -955,7 +1270,7 @@ function _gCard(game, tab) {
 }
 
 function _gOpen(game) {
-	const existing = tabs.find((t) => t.type === "game" && t.gameId === game.id);
+	const existing = tabs.find((t) => t.type === "game" && t.gameId === game.id && !t.closing);
 	if (existing) return activate(existing);
 	const tab = makeGameTab(game);
 	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
@@ -1240,7 +1555,7 @@ $("clear-data").addEventListener("click", async () => {
 $("about-link").addEventListener("click", () => openPanel("about"));
 
 function openAiTab() {
-	const existing = tabs.find((t) => t.type === "ai");
+	const existing = tabs.find((t) => t.type === "ai" && !t.closing);
 	if (existing) return activate(existing);
 	const tab = makeAiTab();
 	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
@@ -1249,7 +1564,7 @@ function openAiTab() {
 $("ai-btn").addEventListener("click", openAiTab);
 
 function openGamesTab() {
-	const existing = tabs.find((t) => t.type === "games");
+	const existing = tabs.find((t) => t.type === "games" && !t.closing);
 	if (existing) return activate(existing);
 	const tab = makeGamesTab();
 	tabs.splice(active ? tabs.indexOf(active) + 1 : tabs.length, 0, tab);
@@ -1313,7 +1628,7 @@ window.addEventListener("pagehide", () => {
 });
 
 Object.defineProperty(window, "__nc_a3c8", { value: (frameEl, go) => {
-	const tab = tabs.find((t) => t.iframe && t.iframe === frameEl);
+	const tab = tabs.find((t) => t.iframe && t.iframe === frameEl && !t.closing);
 	if (!tab || !engine) return false;
 	const target = go ? resolveInput(go) : null;
 	setTimeout(() => (target ? navigate(target, { tab }) : showHome(tab)));
@@ -1360,19 +1675,15 @@ async function boot() {
 
 	const target = go ? resolveInput(go) : null;
 	if (target) {
-		const tab = makeTab();
-		tabs.push(tab);
+		let tab = active?.type === "browser" && !active.url ? active : null;
+		if (!tab) {
+			tab = makeTab();
+			tabs.push(tab);
+		}
 		navigate(target, { tab });
 	} else if (active?.type === "browser" && active.url && !active.handle) {
 		ensureFrame(active).go(active.url);
-	} else {
-		for (const t of tabs) {
-			if (t.type === "browser" && t.url && !t.handle) {
-				ensureFrame(t).go(t.url);
-				if (t !== active) activate(t);
-				break;
-			}
-		}
+		showFrames();
 	}
 }
 

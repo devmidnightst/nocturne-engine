@@ -43,13 +43,16 @@ const fail = (m) => {
 
 async function newShell(transport) {
 	const context = await browser.newContext();
-	await context.addInitScript((t) => {
-		localStorage.setItem("umbrella:settings", JSON.stringify({ transport: t, blockAds: true }));
-	}, transport);
+	await context.addInitScript(
+		([t, wisp]) => {
+			localStorage.setItem("_p8q2:settings", JSON.stringify({ _m: t === "libcurl" ? "lc" : "ep", _srvUrl: wisp, blockAds: true }));
+		},
+		[transport, base.replace("http", "ws") + "/wisp/"]
+	);
 	const extraCa = process.env.UMBRELLA_E2E_EXTRA_CA || process.env.NOCTURNE_E2E_EXTRA_CA;
 	if (extraCa) {
 		const pem = fs.readFileSync(extraCa, "utf8");
-		await context.route("**/transports/epoxy.mjs", async (route) => {
+		await context.route("**/assets/r/transport.alt.mjs", async (route) => {
 			const res = await route.fetch();
 			const body = (await res.text()).replace(
 				"this.client = new EpoxyClient(this.wisp, options);",
@@ -213,14 +216,17 @@ async function runErrorPage() {
 	await page.goto(`${base}/?go=${encodeURIComponent("http://umbrella-does-not-exist.invalid/")}`);
 	try {
 		await page.waitForFunction(
-			() => document.getElementById("frame")?.contentDocument?.title?.includes("Umbrella"),
+			() => {
+				const doc = document.getElementById("frame")?.contentDocument;
+				return !!doc?.getElementById("retry") && doc.title.includes("doesn't seem to exist");
+			},
 			null,
 			{ timeout: 30_000 }
 		);
 		const title = await proxyFrame(page).title();
-		pass(`unknown host shows an umbrella error page ("${title}")`);
+		pass(`unknown host shows the error page ("${title.trim()}")`);
 	} catch {
-		fail("unknown host did not show the umbrella error page");
+		fail("unknown host did not show the error page");
 	}
 	await context.close();
 }
@@ -360,11 +366,111 @@ async function runTabs() {
 			? pass("a reload brings back every tab and the active one")
 			: fail(`reload restored ${JSON.stringify(restored)}`);
 
+		// busy sites keep changing <head>, which used to rebuild every tab row
+		await page.evaluate(() => {
+			window.__rowsAdded = 0;
+			new MutationObserver((ms) => {
+				for (const m of ms) window.__rowsAdded += [...m.addedNodes].filter((n) => n.classList?.contains("tab-row")).length;
+			}).observe(document.getElementById("tab-list"), { childList: true });
+		});
+		await tabFrame().evaluate(
+			() =>
+				new Promise((r) => {
+					let n = 0;
+					const t = setInterval(() => {
+						document.head.append(document.createElement("style"));
+						if (++n >= 100) clearInterval(t), r();
+					}, 5);
+				})
+		);
+		await page.waitForTimeout(300);
+		const rowsAdded = await page.evaluate(() => window.__rowsAdded);
+		rowsAdded === 0 ? pass("head changes on a busy page leave the tab list alone") : fail(`head changes rebuilt ${rowsAdded} tab rows`);
+
 		await page.keyboard.press("Alt+w");
 		await waitRows(2);
 		pass("alt+w closes the current tab");
+
+		// open tabs only live for the browser session
+		const fresh = await context.newPage();
+		await fresh.goto(base);
+		await fresh.waitForSelector(".tab-row", { timeout: 30_000 });
+		await fresh.waitForTimeout(500);
+		const freshRows = (await fresh.$$(".tab-row")).length;
+		freshRows === 1 ? pass("a fresh visit starts with one tab") : fail(`a fresh visit opened ${freshRows} tabs`);
+		await fresh.close();
 	} catch (err) {
 		fail(`tab checks: ${err.message}`);
+	}
+	await context.close();
+}
+
+// tabs that play sound get a speaker in the sidebar and a media card with
+// controls. muted autoplay videos (page heroes, hover previews) do not count.
+async function runTabMedia() {
+	console.log("\ntab media");
+	const { context, page } = await newShell("libcurl");
+	const frame = () => page.frames().find((f) => f.parentFrame() === page.mainFrame() && f.url().includes("audio.html"));
+	const speaker = () => page.$eval(".tab-row.active .tab-audio", (b) => (b.hidden ? "" : b.classList.contains("muted") ? "muted" : "on"));
+	try {
+		await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "audio.html")}`);
+		await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.title === "audio fixture", null, { timeout: 30_000 });
+		await frame().evaluate(() => document.getElementById("hero").play());
+		await page.waitForTimeout(800);
+		(await page.$eval("#media-list", (e) => e.hidden)) && !(await speaker())
+			? pass("a muted autoplay video shows no speaker or media card")
+			: fail("a muted autoplay video showed media controls");
+
+		await frame().evaluate(() => document.getElementById("song").play());
+		await page.waitForSelector("#media-list:not([hidden]) .media-card", { timeout: 5_000 });
+		const card = await page.$eval(".media-card", (c) => ({
+			title: c.querySelector(".media-title b").textContent,
+			sub: c.querySelector(".media-title small").textContent,
+			next: !c.querySelector('[data-media="next"]').hidden,
+		}));
+		card.title === "fixture song" && card.sub.startsWith("fixture artist") && card.next && (await speaker()) === "on"
+			? pass("playing audio shows a speaker and a media card with the site's title and controls")
+			: fail(`media card: ${JSON.stringify(card)}, speaker ${await speaker()}`);
+
+		await page.click('.media-card [data-media="next"]');
+		(await frame().evaluate(() => window.nexts)) === 1 ? pass("next calls the site's media session handler") : fail("next did nothing");
+
+		await page.click(".tab-row.active .tab-audio");
+		await page.waitForTimeout(300);
+		const muted = await frame().evaluate(() => document.getElementById("song").muted);
+		muted && (await speaker()) === "muted" ? pass("the tab speaker mutes the tab") : fail(`mute: element muted ${muted}, speaker ${await speaker()}`);
+		await page.click('.media-card [data-media="mute"]');
+		await page.waitForTimeout(300);
+		const after = await frame().evaluate(() => ({ song: document.getElementById("song").muted, hero: document.getElementById("hero").muted }));
+		!after.song && after.hero ? pass("unmuting leaves the site's own muted video alone") : fail(`unmute: ${JSON.stringify(after)}`);
+
+		await page.click('.media-card [data-media="toggle"]');
+		await page.waitForTimeout(300);
+		const paused = await frame().evaluate(() => document.getElementById("song").paused);
+		paused && !(await speaker()) && !(await page.$eval("#media-list", (e) => e.hidden))
+			? pass("pause stops the audio and hides the speaker, the card stays")
+			: fail("pause from the media card");
+
+		const duration = await frame().evaluate(() => document.getElementById("song").duration);
+		await page.$eval(
+			".media-range",
+			(r, d) => {
+				r.value = String(d / 2);
+				r.dispatchEvent(new Event("input", { bubbles: true }));
+				r.dispatchEvent(new Event("change", { bubbles: true }));
+			},
+			duration
+		);
+		await page.waitForTimeout(300);
+		const at = await frame().evaluate(() => document.getElementById("song").currentTime);
+		Math.abs(at - duration / 2) < 0.5 ? pass("the seek bar seeks") : fail(`seek landed at ${at} of ${duration}`);
+
+		await page.fill("#address", fixtureUrl + "child.html");
+		await page.press("#address", "Enter");
+		await page.waitForFunction(() => document.getElementById("media-list").hidden, null, { timeout: 10_000 });
+		pass("leaving the page removes its media card");
+	} catch (err) {
+		fail(`tab media checks: ${err.message}`);
 	}
 	await context.close();
 }
@@ -392,14 +498,16 @@ async function runRealSites() {
 		await page.goto(`${base}/?go=${encodeURIComponent(url)}`);
 		await page.waitForTimeout(15_000);
 		let title = "";
+		let errorPage = false;
 		try {
 			title = await proxyFrame(page).title();
+			errorPage = await proxyFrame(page).evaluate(() => !!document.querySelector("main.card #retry"));
 		} catch {
 			// frame gone
 		}
 		const shot = `e2e-${new URL(url).hostname}.png`;
 		await page.screenshot({ path: shot });
-		title && !title.includes("Umbrella") ? pass(`${url} loaded ("${title}", screenshot ${shot})`) : fail(`${url} did not load (title "${title}")`);
+		title && !errorPage ? pass(`${url} loaded ("${title}", screenshot ${shot})`) : fail(`${url} did not load (title "${title}")`);
 		if (errors.length) console.log(`       shell errors: ${errors.slice(0, 3).join(" | ")}`);
 		await context.close();
 	}
@@ -422,6 +530,7 @@ try {
 	await runErrorPage();
 	await runShell();
 	await runTabs();
+	await runTabMedia();
 	await runBlocker();
 	await runRealSites();
 } finally {

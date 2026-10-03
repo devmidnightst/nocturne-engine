@@ -82,6 +82,6 @@ const stmts = {
 setInterval(() => {
   stmts.cleanExpiredSessions.run();
   stmts.cleanExpiredResets.run();
-}, 60 * 60 * 1000);
+}, 60 * 60 * 1000).unref();
 
 export { db, stmts };

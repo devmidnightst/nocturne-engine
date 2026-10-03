@@ -142,6 +142,6 @@ export function buildPatchedLibcurl(source, version) {
 		};
 	}
 	let code = applyPatches(source, LIBCURL_PATCHES, applied, skipped);
-	code = `/* patched by umbrella: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
+	code = `/* p8q2: ${applied.join(", ") || "none"} */\n` + stripSourceMap(code) + "\n";
 	return { code, applied, skipped };
 }

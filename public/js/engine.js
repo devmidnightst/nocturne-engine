@@ -9,6 +9,7 @@ import {
 import { _CP } from "./plugins/captcha-plugin.js";
 import { _CK } from "./plugins/cloak-plugin.js";
 import { _AB } from "./plugins/adblock-plugin.js";
+import { _MW } from "./plugins/media-plugin.js";
 import { loadFilterLists } from "./plugins/blocklist.js";
 
 const _nc_ctrl = globalThis[atob("JHNjcmFtamV0Q29udHJvbGxlcg==")];
@@ -329,7 +330,9 @@ export async function createEngine(events = {}, onStatus) {
 		const blocker = new _CB(blocking, () => site);
 		const cache = new HttpCachePlugin();
 		const perFrame = _fT(() => _t);
+		const media = new _MW(() => tabEvents.onMedia?.());
 		const plugins = [
+			media,
 			new _CK(),
 			cache,
 			new UrlWatcherPlugin((url) => {
@@ -371,6 +374,7 @@ export async function createEngine(events = {}, onStatus) {
 			cache,
 			blocker,
 			perFrame,
+			media,
 			go(url) {
 				tabEvents.onLoading?.(true);
 				frame.go(url);

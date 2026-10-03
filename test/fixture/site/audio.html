@@ -1,0 +1,15 @@
+<!doctype html>
+<html>
+<head><title>audio fixture</title></head>
+<body>
+<p>audio fixture</p>
+<audio id="song" src="/media/tone.wav" loop></audio>
+<video id="hero" src="tone.webm" muted loop playsinline width="160"></video>
+<script>
+	navigator.mediaSession.metadata = new MediaMetadata({ title: "fixture song", artist: "fixture artist" });
+	window.nexts = 0;
+	navigator.mediaSession.setActionHandler("nexttrack", () => window.nexts++);
+	navigator.mediaSession.setActionHandler("previoustrack", () => {});
+</script>
+</body>
+</html>
