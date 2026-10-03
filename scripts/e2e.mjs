@@ -269,9 +269,10 @@ async function runShell() {
 
 		await page.reload();
 		await page.waitForSelector("#boot", { state: "hidden", timeout: 30_000 });
+		await page.click(".restore-prompt.show .restore-yes", { timeout: 30_000 });
 		await waitChild();
 		const restored = await page.inputValue("#address");
-		restored === fixtureUrl + "child.html?after-sw-stop" ? pass("reloading the tab reopens the current site") : fail(`reload opened ${restored}`);
+		restored === fixtureUrl + "child.html?after-sw-stop" ? pass("reloading and restoring reopens the current site") : fail(`reload opened ${restored}`);
 
 		// a deploy that changes sw.js installs a new worker while the shell stays
 		// open. the controller kept posting to the old, dead worker, so every
@@ -360,10 +361,11 @@ async function runTabs() {
 
 		await page.reload();
 		await page.waitForSelector("#boot", { state: "hidden", timeout: 30_000 });
+		await page.click(".restore-prompt.show .restore-yes", { timeout: 30_000 });
 		await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.title === "tab fixture", null, { timeout: 30_000 });
 		const restored = await rows();
 		restored.length === 3 && restored[0].active && restored[2].url === fixtureUrl + "child.html?from-middle"
-			? pass("a reload brings back every tab and the active one")
+			? pass("restoring after a reload brings back every tab and the active one")
 			: fail(`reload restored ${JSON.stringify(restored)}`);
 
 		// busy sites keep changing <head>, which used to rebuild every tab row

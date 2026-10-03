@@ -44,7 +44,6 @@ const ui = {
 };
 
 
-const LEGACY_CURRENT_KEY = "_p8q2:current";
 const FRAME_ALLOW =
 	"fullscreen; clipboard-read; clipboard-write; autoplay; encrypted-media; picture-in-picture; microphone; camera; display-capture";
 
@@ -162,12 +161,15 @@ function makeGamesTab() {
 const tabLabel = (tab) => tab.title || (tab.url ? hostOf(tab.url) : "new tab");
 
 let saveTimer = null;
+let pendingRestore = null;
 function writeSession() {
 	clearTimeout(saveTimer);
 	saveTimer = null;
+	const open = tabs.filter((t) => !t.closing && (t.type !== "browser" || t.url)).map(({ id, url, title, type, gameId }) => ({ id, url, title, type, gameId }));
+	const kept = pendingRestore ? pendingRestore.tabs.filter((t) => !open.some((o) => o.id === t.id)) : [];
 	session.save({
-		tabs: tabs.filter((t) => !t.closing).map(({ id, url, title, type, gameId }) => ({ id, url, title, type, gameId })),
-		active: active?.id ?? null,
+		tabs: [...kept, ...open],
+		active: pendingRestore?.active ?? active?.id ?? null,
 	});
 }
 
@@ -196,24 +198,48 @@ function restoreTab(t) {
 	return typeof t.url === "string" ? makeTab({ id: t.id, url: t.url, title: t.title || "" }) : null;
 }
 
-function restoreSession() {
+function getSavedSession() {
 	const saved = reloadedPage() ? session.load() : null;
-	if (saved && Array.isArray(saved.tabs)) {
-		for (const t of saved.tabs) {
-			const tab = restoreTab(t);
-			if (tab) tabs.push(tab);
-		}
+	if (!saved || !Array.isArray(saved.tabs)) return null;
+	const restorable = saved.tabs.filter((t) => t && (t.type === "ai" || t.type === "games" || t.type === "game" || (typeof t.url === "string" && t.url)));
+	return restorable.length ? { tabs: restorable, active: saved.active } : null;
+}
+
+function showRestorePrompt(saved) {
+	const count = saved.tabs.length;
+	const prompt = el("div", { class: "restore-prompt", role: "status" },
+		el("span", {}, `reopen ${count} tab${count === 1 ? "" : "s"}?`),
+		el("button", { class: "restore-yes", type: "button", onclick: () => close(true) }, "restore"),
+		el("button", { type: "button", onclick: () => close(false) }, "dismiss")
+	);
+	document.body.append(prompt);
+	requestAnimationFrame(() => requestAnimationFrame(() => prompt.classList.add("show")));
+	let done = false;
+	const autoHide = setTimeout(() => close(false), 15000);
+
+	function close(restore) {
+		if (done) return;
+		done = true;
+		pendingRestore = null;
+		clearTimeout(autoHide);
+		prompt.classList.remove("show");
+		setTimeout(() => prompt.remove(), 300);
+		if (restore) restoreTabs(saved);
+		saveSession();
 	}
-	if (!tabs.length) {
-		let legacy = null;
-		try {
-			legacy = sessionStorage.getItem(LEGACY_CURRENT_KEY);
-			sessionStorage.removeItem(LEGACY_CURRENT_KEY);
-		} catch {
-		}
-		if (legacy) tabs.push(makeTab({ url: legacy }));
+}
+
+function restoreTabs(saved) {
+	const blank = tabs.length === 1 && tabs[0].type === "browser" && !tabs[0].url && !tabs[0].handle ? tabs[0] : null;
+	const restored = saved.tabs.map(restoreTab).filter((t) => t && !tabs.some((o) => o.id === t.id));
+	if (!restored.length) return;
+	if (blank) {
+		tabs.splice(0, 1);
+		tabRows.get(blank.id)?.remove();
+		tabRows.delete(blank.id);
 	}
-	return tabs.find((t) => t.id === saved?.active) ?? null;
+	tabs.push(...restored);
+	activate(restored.find((t) => t.id === saved.active) ?? restored[restored.length - 1]);
 }
 
 let renderQueued = false;
@@ -1644,18 +1670,14 @@ async function boot() {
 
 	const go = new URLSearchParams(location.search).get("go");
 	cleanAddressBar();
-	const restoredActive = restoreSession();
+	const saved = getSavedSession();
+	pendingRestore = saved;
+	openTab();
 	renderTabs();
 	renderEssentials();
 
 	ui.boot.classList.add("done");
 	setTimeout(() => (ui.boot.hidden = true), 250);
-
-	if (tabs.length) {
-		activate(restoredActive ?? tabs[tabs.length - 1]);
-	} else {
-		openTab();
-	}
 
 	const engStatus = $("engine-status");
 	if (engStatus) engStatus.hidden = false;
@@ -1670,7 +1692,6 @@ async function boot() {
 	}
 
 	if (engStatus) engStatus.hidden = true;
-	toast("ready to browse");
 	(window.requestIdleCallback ?? setTimeout)(prefetchIcons, { timeout: 3000 });
 
 	const target = go ? resolveInput(go) : null;
@@ -1681,9 +1702,8 @@ async function boot() {
 			tabs.push(tab);
 		}
 		navigate(target, { tab });
-	} else if (active?.type === "browser" && active.url && !active.handle) {
-		ensureFrame(active).go(active.url);
-		showFrames();
+	} else if (saved) {
+		showRestorePrompt(saved);
 	}
 }
 
