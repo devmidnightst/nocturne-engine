@@ -724,10 +724,15 @@ export function mountAiChat(root) {
 			status.lastChild.textContent = "Thinking";
 		}
 
-		const apiMessages = chat.messages
-			.slice(-20)
-			.filter((m) => !m.error && !m.stopped)
-			.map(toApi);
+		const kept = [];
+		for (const m of chat.messages.slice(-20)) {
+			if (m.error || m.stopped) {
+				if (kept.at(-1)?.role === "user") kept.pop();
+				continue;
+			}
+			kept.push(m);
+		}
+		const apiMessages = kept.map(toApi);
 		apiMessages.unshift({ role: "system", content: systemPrompt(web) });
 
 		let stick = true;

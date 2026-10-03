@@ -70,8 +70,13 @@ export function createAiRouter() {
 				if (res.destroyed) break;
 				if (!res.write(value)) {
 					await new Promise((r) => {
-						res.once("drain", r);
-						res.once("close", r);
+						const done = () => {
+							res.off("drain", done);
+							res.off("close", done);
+							r();
+						};
+						res.once("drain", done);
+						res.once("close", done);
 					});
 				}
 			}

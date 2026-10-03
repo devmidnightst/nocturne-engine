@@ -511,11 +511,14 @@ function guardedLookup(hostname, options, callback) {
 	});
 }
 
+// a tiny compressed body can expand to gigabytes, so the decoded size is capped too
+const MAX_DECODED = 4_000_000;
+
 function decodeBody(buf, encoding) {
-	const loose = { finishFlush: zlib.constants.Z_SYNC_FLUSH };
+	const loose = { finishFlush: zlib.constants.Z_SYNC_FLUSH, maxOutputLength: MAX_DECODED };
 	if (encoding === "gzip" || encoding === "x-gzip") return zlib.gunzipSync(buf, loose);
 	if (encoding === "deflate") return zlib.inflateSync(buf, loose);
-	if (encoding === "br") return zlib.brotliDecompressSync(buf, { finishFlush: zlib.constants.BROTLI_OPERATION_FLUSH });
+	if (encoding === "br") return zlib.brotliDecompressSync(buf, { finishFlush: zlib.constants.BROTLI_OPERATION_FLUSH, maxOutputLength: MAX_DECODED });
 	return buf;
 }
 
@@ -550,7 +553,14 @@ export function fetchPage(url, { timeout = 5000, maxBytes = 1_500_000, hops = 0 
 				if (status >= 300 && status < 400 && headers.location) {
 					res.resume();
 					if (hops >= 3) return reject(new Error("too many redirects"));
-					return resolve(fetchPage(new URL(headers.location, u).href, { timeout, maxBytes, hops: hops + 1 }));
+					// this runs outside the promise executor, so a throw here would crash the process
+					let next;
+					try {
+						next = new URL(headers.location, u).href;
+					} catch {
+						return reject(new Error("bad redirect"));
+					}
+					return resolve(fetchPage(next, { timeout, maxBytes, hops: hops + 1 }));
 				}
 				const type = String(headers["content-type"] ?? "");
 				if (status !== 200 || !/text\/html|application\/xhtml|text\/plain/i.test(type)) {

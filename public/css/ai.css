@@ -311,7 +311,7 @@
 	max-width: 100%;
 }
 
-@supports ((-webkit-background-clip: text) or (background-clip: text)) {
+@supports ((-webkit-background-clip: text) or (background-clip: text)) and (color: color-mix(in srgb, red 50%, white)) {
 	.aic-greet {
 		background-image: linear-gradient(
 			100deg,
@@ -773,7 +773,9 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 6px;
-	max-width: 260px;
+	max-width: min(260px, 100%);
+	min-width: 0;
+	overflow: hidden;
 	padding: 4px 10px 4px 4px;
 	border: 1px solid var(--a-line);
 	border-radius: 999px;
@@ -795,7 +797,11 @@
 }
 
 .aic-sources small {
-	flex: none;
+	flex: 0 1 auto;
+	min-width: 0;
+	max-width: 45%;
+	overflow: hidden;
+	text-overflow: ellipsis;
 	font-size: 0.7rem;
 	color: var(--a-muted);
 }

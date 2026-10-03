@@ -1,6 +1,8 @@
 import { test, beforeEach } from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import net from "node:net";
+import zlib from "node:zlib";
 import express from "express";
 
 import {
@@ -78,7 +80,7 @@ test("duckduckgo html: direct links, ads skipped, titles and snippets stay paire
 	);
 	assert.equal(results[0].snippet, "Rust is fast & reliable");
 	assert.equal(results[1].snippet, "");
-	assert.equal(results[2].title, "Rust 'lang' — Wikipedia");
+	assert.equal(results[2].title, "Rust 'lang' \u2014 Wikipedia");
 	assert.equal(results[2].snippet, 'Rust "emphasizes" safety');
 });
 
@@ -242,6 +244,35 @@ test("page reader refuses private addresses", async () => {
 	} finally {
 		srv.close();
 	}
+});
+
+// answers every connection the default agent opens with the given raw response,
+// so fetchPage runs unchanged against a public looking hostname
+async function withRawServer(raw, fn) {
+	const srv = net.createServer((s) => s.once("data", () => s.end(raw)));
+	await new Promise((r) => srv.listen(0, "127.0.0.1", r));
+	const original = http.globalAgent.createConnection;
+	http.globalAgent.createConnection = () => net.connect(srv.address().port, "127.0.0.1");
+	try {
+		return await fn();
+	} finally {
+		http.globalAgent.createConnection = original;
+		srv.close();
+	}
+}
+
+test("page reader rejects a broken redirect instead of crashing", async () => {
+	for (const loc of ["http://[", "http://a:99999/", "https://:80/"]) {
+		await withRawServer(`HTTP/1.1 302 Found\r\nLocation: ${loc}\r\nContent-Length: 0\r\nConnection: close\r\n\r\n`, () =>
+			assert.rejects(fetchPage("http://example.test/"), /bad redirect/),
+		);
+	}
+});
+
+test("page reader caps how big a compressed page can expand", async () => {
+	const bomb = zlib.brotliCompressSync(Buffer.alloc(50_000_000, 0x61));
+	const head = `HTTP/1.1 200 OK\r\nContent-Type: text/html\r\nContent-Encoding: br\r\nContent-Length: ${bomb.length}\r\nConnection: close\r\n\r\n`;
+	await withRawServer(Buffer.concat([Buffer.from(head), bomb]), () => assert.rejects(fetchPage("http://example.test/"), /buffer|too large|ERR_BUFFER/i));
 });
 
 test("cookie jar keeps, scopes and expires cookies", () => {
