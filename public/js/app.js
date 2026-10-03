@@ -35,6 +35,7 @@ const ui = {
 	banner: $("banner"),
 	toast: $("toast"),
 	tabList: $("tab-list"),
+	media: $("media-list"),
 	essentials: $("essentials-grid"),
 	tabCount: $("tab-count"),
 	mobileUrl: $("mobile-url"),
@@ -254,6 +255,7 @@ function tabRow(tab) {
 			{ class: "tab-row entering", role: "tab", draggable: "true", "data-id": tab.id },
 			el("span", { class: "fav" }),
 			el("span", { class: "tab-title" }),
+			el("button", { class: "tab-audio", "data-audio": tab.id, hidden: "" }),
 			el("button", { class: "tab-close", "data-close": tab.id }, icon("M6 6l12 12M18 6L6 18"))
 		);
 		row.addEventListener("animationend", (e) => {
@@ -277,7 +279,181 @@ function tabRow(tab) {
 	if (title.textContent !== label) title.textContent = label;
 	const close = row.querySelector(".tab-close");
 	if (close.getAttribute("aria-label") !== `close ${label}`) close.setAttribute("aria-label", `close ${label}`);
+	const sound = tab.media?.muted ? "muted" : tab.media?.audible ? "on" : "";
+	if ((row.dataset.sound ?? "") !== sound) {
+		row.dataset.sound = sound;
+		const btn = row.querySelector(".tab-audio");
+		btn.hidden = !sound;
+		btn.classList.toggle("muted", sound === "muted");
+		btn.replaceChildren(icon(sound === "muted" ? ICONS.muted : ICONS.sound));
+		btn.title = sound === "muted" ? "unmute this tab" : "mute this tab";
+		btn.setAttribute("aria-label", btn.title);
+	}
 	return row;
+}
+
+const ICONS = {
+	sound: "M11 5L6 9H3v6h3l5 4zM15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13",
+	muted: "M11 5L6 9H3v6h3l5 4zM22 9l-6 6M16 9l6 6",
+	play: "M8 5.5v13l10.5-6.5z",
+	pause: "M8.5 5.5v13M15.5 5.5v13",
+	prev: "M18 6.5v11l-8.5-5.5zM6.5 6.5v11",
+	next: "M6 6.5v11l8.5-5.5zM17.5 6.5v11",
+	pip: "M3.5 5.5h17v13h-17zM12.5 12h5.5v4h-5.5z",
+};
+
+function clock(sec) {
+	const s = Math.max(0, Math.floor(sec || 0));
+	const h = Math.floor(s / 3600);
+	const m = Math.floor((s % 3600) / 60);
+	const ss = String(s % 60).padStart(2, "0");
+	return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
+function refreshMedia(tab) {
+	let next = null;
+	try {
+		next = tab.closing ? null : tab.handle?.media?.state() ?? null;
+	} catch {
+	}
+	tab.media = next;
+	scheduleRender();
+	scheduleMediaRender();
+	if (next?.playing) startMediaClock();
+}
+
+let mediaClock = null;
+function startMediaClock() {
+	if (mediaClock) return;
+	mediaClock = setInterval(() => {
+		const live = tabs.filter((t) => t.media);
+		for (const t of live) refreshMedia(t);
+		if (!tabs.some((t) => t.media?.playing)) {
+			clearInterval(mediaClock);
+			mediaClock = null;
+		}
+	}, 500);
+}
+
+let mediaQueued = false;
+function scheduleMediaRender() {
+	if (mediaQueued) return;
+	mediaQueued = true;
+	requestAnimationFrame(() => {
+		mediaQueued = false;
+		renderMedia();
+	});
+}
+
+const mediaCards = new Map();
+
+function mediaButton(act, id, path, label, extra = "") {
+	return el("button", { class: `icon-btn small media-btn ${extra}`, "data-media": act, "data-id": id, title: label, "aria-label": label }, icon(path));
+}
+
+function mediaCard(tab) {
+	let card = mediaCards.get(tab.id);
+	if (!card) {
+		card = el(
+			"div",
+			{ class: "media-card", "data-id": tab.id },
+			el(
+				"div",
+				{ class: "media-head" },
+				el("button", { class: "media-title", "data-media": "show", "data-id": tab.id }, el("b"), el("small")),
+				mediaButton("pip", tab.id, ICONS.pip, "picture in picture")
+			),
+			el(
+				"div",
+				{ class: "media-seek" },
+				el("span", { class: "media-time" }),
+				el("input", { class: "media-range", type: "range", min: "0", max: "0", step: "0.1", value: "0", "data-id": tab.id, "aria-label": "seek" }),
+				el("span", { class: "media-time" })
+			),
+			el(
+				"div",
+				{ class: "media-controls" },
+				mediaButton("prev", tab.id, ICONS.prev, "previous", "solid"),
+				mediaButton("toggle", tab.id, ICONS.play, "play", "solid media-play"),
+				mediaButton("next", tab.id, ICONS.next, "next", "solid"),
+				el("span", { class: "spacer" }),
+				mediaButton("mute", tab.id, ICONS.sound, "mute")
+			)
+		);
+		mediaCards.set(tab.id, card);
+	}
+	const m = tab.media;
+	const title = m.title || tabLabel(tab);
+	const sub = [m.artist, tab.url ? hostOf(tab.url) : ""].filter(Boolean).join(" · ");
+	const b = card.querySelector(".media-title b");
+	const small = card.querySelector(".media-title small");
+	if (b.textContent !== title) b.textContent = title;
+	if (small.textContent !== sub) small.textContent = sub;
+	card.querySelector(".media-title").title = title;
+	const seek = card.querySelector(".media-seek");
+	const range = card.querySelector(".media-range");
+	const [now, end] = card.querySelectorAll(".media-time");
+	seek.classList.toggle("live", m.live);
+	now.hidden = m.live;
+	if (!range.dragging) {
+		range.max = String(m.duration || 0);
+		range.value = String(Math.min(m.time, m.duration || 0));
+		now.textContent = clock(m.time);
+	}
+	range.disabled = !m.duration;
+	end.textContent = m.live ? "live" : clock(m.duration);
+	const play = card.querySelector('[data-media="toggle"]');
+	const playKey = m.playing ? "pause" : "play";
+	if (play.dataset.state !== playKey) {
+		play.dataset.state = playKey;
+		play.replaceChildren(icon(ICONS[playKey]));
+		play.title = playKey;
+		play.setAttribute("aria-label", playKey);
+		play.classList.toggle("solid", playKey === "play");
+	}
+	card.querySelector('[data-media="prev"]').hidden = !m.canPrev;
+	card.querySelector('[data-media="next"]').hidden = !m.canNext;
+	const pip = card.querySelector('[data-media="pip"]');
+	pip.hidden = !m.canPip;
+	pip.classList.toggle("on", m.pip);
+	const mute = card.querySelector('[data-media="mute"]');
+	const muteKey = m.muted ? "muted" : "sound";
+	if (mute.dataset.state !== muteKey) {
+		mute.dataset.state = muteKey;
+		mute.replaceChildren(icon(ICONS[muteKey]));
+		mute.title = m.muted ? "unmute this tab" : "mute this tab";
+		mute.setAttribute("aria-label", mute.title);
+	}
+	return card;
+}
+
+function renderMedia() {
+	const list = tabs.filter((t) => t.media && !t.closing).slice(0, 3);
+	const ids = new Set(list.map((t) => t.id));
+	for (const [id, card] of mediaCards) {
+		if (!ids.has(id)) {
+			card.remove();
+			mediaCards.delete(id);
+		}
+	}
+	let cursor = ui.media.firstElementChild;
+	for (const tab of list) {
+		const card = mediaCard(tab);
+		if (card === cursor) cursor = cursor.nextElementSibling;
+		else ui.media.insertBefore(card, cursor);
+	}
+	ui.media.hidden = !list.length;
+}
+
+function mediaOf(id) {
+	return tabs.find((t) => t.id === id && !t.closing);
+}
+
+function toggleTabMute(tab) {
+	const media = tab?.handle?.media;
+	if (!media) return;
+	media.setMuted(!media.muted);
+	refreshMedia(tab);
 }
 
 function renderTabs() {
@@ -523,7 +699,9 @@ function closeTab(tab) {
 		tab.iframe?.remove();
 		const at = tabs.indexOf(tab);
 		if (at !== -1) tabs.splice(at, 1);
+		tab.media = null;
 		scheduleRender();
+		scheduleMediaRender();
 		saveSession();
 	};
 	if (row?.isConnected) {
@@ -593,7 +771,10 @@ function tabEvents(tab) {
 			scheduleRender();
 			saveSession();
 		},
-		onLoading: setTabLoading,
+		onLoading(on) {
+			setTabLoading(on);
+			if (tab.media) refreshMedia(tab);
+		},
 		onIcon(src) {
 			if (tab.url) loadIcon(tab.url, src);
 		},
@@ -607,6 +788,9 @@ function tabEvents(tab) {
 			if (!info.looksBlank || (info.errors === 0 && info.rewriteErrors === 0)) return;
 			tab.health = info;
 			if (tab === active) showHealth(info);
+		},
+		onMedia() {
+			refreshMedia(tab);
 		},
 		onAntiAdblock(info) {
 			tab.antiAdblock = info;
@@ -716,7 +900,42 @@ window.addEventListener("message", async (e) => {
 	}
 });
 
+ui.media.addEventListener("click", (e) => {
+	const btn = e.target.closest("[data-media]");
+	const tab = btn && mediaOf(btn.dataset.id);
+	if (!tab) return;
+	const media = tab.handle?.media;
+	const act = btn.dataset.media;
+	if (act === "show") return activate(tab);
+	if (!media) return;
+	if (act === "toggle") media.toggle();
+	else if (act === "prev") media.action("previoustrack");
+	else if (act === "next") media.action("nexttrack");
+	else if (act === "pip") media.pip();
+	else if (act === "mute") return toggleTabMute(tab);
+	setTimeout(() => refreshMedia(tab), 100);
+});
+ui.media.addEventListener("input", (e) => {
+	const range = e.target.closest(".media-range");
+	if (!range) return;
+	range.dragging = true;
+	range.parentElement.querySelector(".media-time").textContent = clock(Number(range.value));
+});
+ui.media.addEventListener("change", (e) => {
+	const range = e.target.closest(".media-range");
+	if (!range) return;
+	range.dragging = false;
+	const tab = mediaOf(range.dataset.id);
+	tab?.handle?.media?.seek(Number(range.value));
+	if (tab) setTimeout(() => refreshMedia(tab), 100);
+});
+
 ui.tabList.addEventListener("click", (e) => {
+	const audioId = e.target.closest("[data-audio]")?.dataset.audio;
+	if (audioId) {
+		e.stopPropagation();
+		return toggleTabMute(mediaOf(audioId));
+	}
 	const closeId = e.target.closest("[data-close]")?.dataset.close;
 	if (closeId) {
 		e.stopPropagation();

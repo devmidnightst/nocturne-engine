@@ -489,6 +489,122 @@ svg {
 	color: var(--text);
 }
 
+.tab-audio {
+	flex: none;
+	width: 24px;
+	height: 24px;
+	display: grid;
+	place-items: center;
+	padding: 0;
+	border: 0;
+	border-radius: 6px;
+	background: transparent;
+	color: var(--muted);
+	cursor: pointer;
+}
+
+.tab-audio svg {
+	width: 14px;
+	height: 14px;
+}
+
+.tab-audio:hover {
+	background: var(--tile-hover);
+	color: var(--text);
+}
+
+.media-list {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	gap: 6px;
+	margin: 6px 4px 6px 0;
+}
+
+.media-card {
+	padding: 8px 6px 4px 10px;
+	border: 1px solid var(--line);
+	border-radius: 8px;
+	background: var(--bg);
+}
+
+.media-head {
+	display: flex;
+	align-items: flex-start;
+	gap: 4px;
+}
+
+.media-title {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	align-items: flex-start;
+	padding: 2px 0 0;
+	border: 0;
+	background: transparent;
+	color: var(--text);
+	font: inherit;
+	text-align: left;
+	cursor: pointer;
+}
+
+.media-title b,
+.media-title small {
+	max-width: 100%;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	line-height: 1.35;
+}
+
+.media-title b {
+	font-size: 13px;
+	font-weight: 600;
+}
+
+.media-title small {
+	font-size: 11.5px;
+	color: var(--muted);
+}
+
+.media-seek {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	margin: 6px 4px 2px 0;
+	font-size: 11px;
+	color: var(--muted);
+	font-variant-numeric: tabular-nums;
+}
+
+.media-range {
+	flex: 1;
+	min-width: 0;
+	height: 16px;
+	margin: 0;
+	accent-color: var(--accent);
+	cursor: pointer;
+}
+
+.media-seek.live .media-range {
+	visibility: hidden;
+}
+
+.media-controls {
+	display: flex;
+	align-items: center;
+	margin-left: -6px;
+}
+
+.media-btn.solid svg {
+	fill: currentColor;
+}
+
+.media-btn.on {
+	color: var(--accent);
+}
+
 .side-bottom {
 	flex: none;
 	display: flex;

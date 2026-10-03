@@ -405,6 +405,76 @@ async function runTabs() {
 	await context.close();
 }
 
+// tabs that play sound get a speaker in the sidebar and a media card with
+// controls. muted autoplay videos (page heroes, hover previews) do not count.
+async function runTabMedia() {
+	console.log("\ntab media");
+	const { context, page } = await newShell("libcurl");
+	const frame = () => page.frames().find((f) => f.parentFrame() === page.mainFrame() && f.url().includes("audio.html"));
+	const speaker = () => page.$eval(".tab-row.active .tab-audio", (b) => (b.hidden ? "" : b.classList.contains("muted") ? "muted" : "on"));
+	try {
+		await page.goto(`${base}/?go=${encodeURIComponent(fixtureUrl + "audio.html")}`);
+		await page.waitForFunction(() => document.getElementById("frame")?.contentDocument?.title === "audio fixture", null, { timeout: 30_000 });
+		await frame().evaluate(() => document.getElementById("hero").play());
+		await page.waitForTimeout(800);
+		(await page.$eval("#media-list", (e) => e.hidden)) && !(await speaker())
+			? pass("a muted autoplay video shows no speaker or media card")
+			: fail("a muted autoplay video showed media controls");
+
+		await frame().evaluate(() => document.getElementById("song").play());
+		await page.waitForSelector("#media-list:not([hidden]) .media-card", { timeout: 5_000 });
+		const card = await page.$eval(".media-card", (c) => ({
+			title: c.querySelector(".media-title b").textContent,
+			sub: c.querySelector(".media-title small").textContent,
+			next: !c.querySelector('[data-media="next"]').hidden,
+		}));
+		card.title === "fixture song" && card.sub.startsWith("fixture artist") && card.next && (await speaker()) === "on"
+			? pass("playing audio shows a speaker and a media card with the site's title and controls")
+			: fail(`media card: ${JSON.stringify(card)}, speaker ${await speaker()}`);
+
+		await page.click('.media-card [data-media="next"]');
+		(await frame().evaluate(() => window.nexts)) === 1 ? pass("next calls the site's media session handler") : fail("next did nothing");
+
+		await page.click(".tab-row.active .tab-audio");
+		await page.waitForTimeout(300);
+		const muted = await frame().evaluate(() => document.getElementById("song").muted);
+		muted && (await speaker()) === "muted" ? pass("the tab speaker mutes the tab") : fail(`mute: element muted ${muted}, speaker ${await speaker()}`);
+		await page.click('.media-card [data-media="mute"]');
+		await page.waitForTimeout(300);
+		const after = await frame().evaluate(() => ({ song: document.getElementById("song").muted, hero: document.getElementById("hero").muted }));
+		!after.song && after.hero ? pass("unmuting leaves the site's own muted video alone") : fail(`unmute: ${JSON.stringify(after)}`);
+
+		await page.click('.media-card [data-media="toggle"]');
+		await page.waitForTimeout(300);
+		const paused = await frame().evaluate(() => document.getElementById("song").paused);
+		paused && !(await speaker()) && !(await page.$eval("#media-list", (e) => e.hidden))
+			? pass("pause stops the audio and hides the speaker, the card stays")
+			: fail("pause from the media card");
+
+		const duration = await frame().evaluate(() => document.getElementById("song").duration);
+		await page.$eval(
+			".media-range",
+			(r, d) => {
+				r.value = String(d / 2);
+				r.dispatchEvent(new Event("input", { bubbles: true }));
+				r.dispatchEvent(new Event("change", { bubbles: true }));
+			},
+			duration
+		);
+		await page.waitForTimeout(300);
+		const at = await frame().evaluate(() => document.getElementById("song").currentTime);
+		Math.abs(at - duration / 2) < 0.5 ? pass("the seek bar seeks") : fail(`seek landed at ${at} of ${duration}`);
+
+		await page.fill("#address", fixtureUrl + "child.html");
+		await page.press("#address", "Enter");
+		await page.waitForFunction(() => document.getElementById("media-list").hidden, null, { timeout: 10_000 });
+		pass("leaving the page removes its media card");
+	} catch (err) {
+		fail(`tab media checks: ${err.message}`);
+	}
+	await context.close();
+}
+
 async function runBlocker() {
 	console.log("\ncontent blocker");
 	const { context, page } = await newShell("epoxy");
@@ -460,6 +530,7 @@ try {
 	await runErrorPage();
 	await runShell();
 	await runTabs();
+	await runTabMedia();
 	await runBlocker();
 	await runRealSites();
 } finally {
